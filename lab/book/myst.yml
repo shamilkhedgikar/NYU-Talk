@@ -3,6 +3,8 @@ version: 1
 project:
   title: From Overlays to Operators
   subtitle: Relational Spatial Weights for Data-Driven Policy
+  bibliography:
+    - references.bib
   toc:
     - file: intro.md
     - title: Introduction

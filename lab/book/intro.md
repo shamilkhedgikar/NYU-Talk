@@ -10,11 +10,11 @@ Conceptually, they were developed to bridge two traditions of *space* and *place
 
 ## Space, Place and the Limits of Conventional Spatial Weights
 
-Spatial econometrics and regional science have historically modeled spatial dependence through geometrically defined spatial weights matrices based on contiguity, distance, or nearest-neighbor relationships \citep{anselin1988}. These approaches reflect the assumption that spatial interaction primarily operates through geographic proximity.
+Spatial econometrics and regional science have historically modeled spatial dependence through geometrically defined spatial weights matrices based on contiguity, distance, or nearest-neighbor relationships [@anselin1988]. These approaches reflect the assumption that spatial interaction primarily operates through geographic proximity.
 
-However, urban systems frequently exhibit relational dependencies that cannot be adequately captured through purely geometric representations of space. Urban theory has long emphasized the importance of \textit{place} as a contextual construct shaped by institutional, infrastructural, and socio-economic relationships \citep{portugali2011}. In planning practice, these contextual relationships are frequently analyzed through overlay techniques that combine multiple spatial layers such as zoning, infrastructure networks, environmental systems, and administrative boundaries.
+However, urban systems frequently exhibit relational dependencies that cannot be adequately captured through purely geometric representations of space. Urban theory has long emphasized the importance of *place* as a contextual construct shaped by institutional, infrastructural, and socio-economic relationships [@portugali2011]. In planning practice, these contextual relationships are frequently analyzed through overlay techniques combining multiple spatial layers such as zoning, infrastructure networks, environmental systems, and administrative boundaries. Starting with qualitative observation and analysis [@mcharg1969design], this tradition has has since accomodated methdologies such as Likert scoring, expert judgment, and other subjective ranking methods translating qualitative assessments into quasi-quantitative outputs.
 
-Despite their conceptual importance, such overlay relationships have rarely been incorporated directly into spatial econometric models. As a result, many spatial models rely on weights matrices that may fail to capture the actual mechanisms generating spatial dependence in real-world spatial systems.
+Despite their conceptual importance, such overlay relationships have rarely been incorporated directly into spatial econometric models. As a result, many spatial models rely on weights matrices that poorly or completely fail to capture the actual mechanisms generating spatial dependence in real-world spatial systems across multiple "layers".
 
 ## Why Conventional Weights Are Not Enough
 
@@ -27,5 +27,3 @@ Overlay analysis has long been the practical way planners reason about these lay
 Recent geospatial machine learning advances, particularly the propogation of embeddings makes this gap gap more visible. Spatial embeddings derived from imagery, mobility traces, and large socioeconomic datasets can represent places as dense latent vectors, but those embeddings are often learned on supports that do not match the units used in econometric or policy analysis. That creates a transfer problem: how should information move from one geography to another without collapsing everything back to naive proximity?
 
 RelWeights provides one answer. By defining similarity through shared contextual overlays rather than only through adjacency, it creates a principled way to transfer, diffuse, and regularize information across heterogeneous spatial supports.
-
-## Lab Overview
