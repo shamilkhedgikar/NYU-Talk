@@ -1,16 +1,20 @@
 # From Overlays to Operators: Relational Spatial Weights for Data-Driven Policy
 
-Urban policy increasingly depends on spatial econometrics, geospatial machine learning, and high-dimensional data systems. But most analytical workflows still encode spatial dependence with simple contiguity or distance-decay weights. That works when interaction follows borders or short-range proximity. It breaks down when the actual mechanism is carried by overlays such as zoning regimes, infrastructure networks, hydrological systems, institutional territories, and layered administrative boundaries.
-
-Relational Spatial Weights (RelWeights) starts from that gap. Instead of treating space as a single geometric surface, it uses thematic overlays to construct spatial operators from shared contextual support. If analysis units $\alpha$ intersect inherited supports $\beta$, the overlap pattern becomes an incidence matrix $B$, a relational similarity kernel $R$, and a Laplacian operator $L_R$ that can be reused across diagnostics, interpolation, spectral analysis, and embedding transfer.
-
 ## Abstract
 
-Data-driven urban policy increasingly relies on spatial econometric models and machine learning systems to analyze complex spatial processes. Yet most spatial analytical frameworks still depend and utilize proximity-based spatial weights matrices derived from adjacency or distance. Sometimes, even constructing these matrices, a Those assumptions often miss the relational structure of real systems, where interaction is mediated by zoning regimes, infrastructure networks, institutional boundaries, and environmental systems.
+Data-driven urban policymaking increasingly relies on ideas developed in spatial econometrics, geospatial machine learning, and high-dimensional data systems. However, most analytical workflows still encode spatial dependence with simple contiguity derived from geographic adjacency or distance-decay. These assumptions often fail to capture the relational structure of spatial systems, where interactions are mediated across layers such as zoning regimes, infrastructure networks, institutional boundaries, and environmental systems.
 
-This lab introduces Relational Spatial Weights (RelWeights) as a framework for turning thematic spatial overlays into formal spatial operators usable in spatial econometrics and geospatial data science. RelWeights provide the ability to formalize irregular but non-arbitrary spatial lags, enable empirical identification of layer-specific spatial externalities, and provide a mechanism for transferring spatial information across geographic scales and heterogeneous supports.
+This notebook introduces Relational Spatial Weights (RelWeights) as a framework for turning traditionally thematic spatial overlays into formal spatial operators usable in spatial econometrics and geospatial data science. RelWeights provide the ability to formalize irregular but non-arbitrary spatial lags, enable empirical identification of layer-specific spatial externalities, and provide a mechanism for transferring spatial information across geographic scales and heterogeneous supports.
 
 Conceptually, they were developed to bridge two traditions of *space* and *place* that have historically diverged. Regional science has usually modeled spatial dependence through geometric proximity across an abstract idea of space, while planning and urban theory have emphasized place as a contextual construct shaped by institutions, infrastructure, and layered territorial relations. RelWeights translates those contextual overlay relationships into quantitative operators that can be estimated, compared, and reused inside real policy workflows.
+
+## Space, Place and the Limits of Conventional Spatial Weights
+
+Spatial econometrics and regional science have historically modeled spatial dependence through geometrically defined spatial weights matrices based on contiguity, distance, or nearest-neighbor relationships \citep{anselin1988}. These approaches reflect the assumption that spatial interaction primarily operates through geographic proximity.
+
+However, urban systems frequently exhibit relational dependencies that cannot be adequately captured through purely geometric representations of space. Urban theory has long emphasized the importance of \textit{place} as a contextual construct shaped by institutional, infrastructural, and socio-economic relationships \citep{portugali2011}. In planning practice, these contextual relationships are frequently analyzed through overlay techniques that combine multiple spatial layers such as zoning, infrastructure networks, environmental systems, and administrative boundaries.
+
+Despite their conceptual importance, such overlay relationships have rarely been incorporated directly into spatial econometric models. As a result, many spatial models rely on weights matrices that may fail to capture the actual mechanisms generating spatial dependence in real-world spatial systems.
 
 ## Why Conventional Weights Are Not Enough
 
