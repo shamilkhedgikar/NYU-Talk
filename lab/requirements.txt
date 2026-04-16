@@ -1,0 +1,16 @@
+jupyter-book>=1.0.4
+jupytext>=1.16
+ipykernel>=6.29
+ipywidgets>=8.1
+matplotlib>=3.9
+networkx>=3.3
+numpy>=2.1
+pandas>=2.2
+plotly>=5.24
+scipy>=1.14
+shapely>=2.0
+geopandas>=1.0
+libpysal>=4.12
+esda>=2.6
+spreg>=1.8
+

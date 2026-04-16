@@ -1,0 +1,59 @@
+version: 1
+
+project:
+  title: From Overlays to Operators
+  subtitle: Relational Spatial Weights for Data-Driven Policy
+  toc:
+    - file: intro.md
+    - title: Introduction
+      children:
+        - file: content/01-foundations/lab-roadmap.md
+          children:
+            - title: Step 1
+              url: /content/foundations/lab-roadmap#step-1-choose-the-two-layers
+            - title: Step 2
+              url: /content/foundations/lab-roadmap#step-2-build-the-incidence-matrix
+            - title: Step 3
+              url: /content/foundations/lab-roadmap#step-3-form-the-relweights-kernel
+            - title: Step 4
+              url: /content/foundations/lab-roadmap#step-4-lift-similarity-into-a-laplacian
+            - title: Step 5
+              url: /content/foundations/lab-roadmap#step-5-read-the-quadratic-form-as-roughness
+            - title: Step 6
+              url: /content/foundations/lab-roadmap#step-6-use-the-spectrum
+            - title: Worked Example
+              url: /content/foundations/lab-roadmap#worked-proposal-example
+            - title: What This Sets Up
+              url: /content/foundations/lab-roadmap#what-this-page-sets-up
+        - file: content/01-foundations/lab-roadmap-notebook.ipynb
+        - file: content/01-foundations/operator-state.md
+    - title: Core Modules
+      children:
+        - file: content/02-build/build.md
+        - file: content/03-export/export.md
+        - file: content/04-spectral/spectral.md
+        - file: content/05-diagnostics/diagnostics.md
+        - file: content/06-externalities/externalities.md
+        - file: content/07-interpolation/interpolation.md
+        - file: content/08-simulate/simulate.md
+    - title: References
+      children:
+        - file: content/09-references/references.md
+
+site:
+  template: book-theme
+  title: From Overlays to Operators
+  nav:
+    - title: GitHub
+      url: https://github.com/
+    - title: Colab
+      url: https://colab.research.google.com/
+  actions: []
+  options:
+    folders: true
+    hide_outline: true
+    logo_text: From Overlays to Operators
+    logo_alt: From Overlays to Operators
+    style: styles/site.css
+  parts:
+    primary_sidebar_footer: primary-sidebar-footer.md
