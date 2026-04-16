@@ -162,3 +162,81 @@
 html {
   scroll-behavior: smooth;
 }
+
+@media (min-width: 1024px) {
+  .article-grid {
+    grid-template-columns:
+      [screen-start] 0.25rem
+      [screen-inset-start page-start] 0.5rem
+      [page-inset-start body-outset-start] 0.75fr
+      [body-start gutter-left-start] 1rem
+      [body-inset-start] minmax(9ch, 12ch)
+      [middle-start] minmax(9ch, 12ch)
+      [gutter-left-end] minmax(9ch, 12ch)
+      minmax(9ch, 12ch)
+      [gutter-right-start] minmax(9ch, 12ch)
+      [middle-end] minmax(9ch, 12ch)
+      [body-inset-end] 1rem
+      [body-end gutter-right-end] 2rem
+      [body-outset-end] minmax(1rem, 6rem)
+      [page-inset-end] 1rem
+      [page-end] 0.75fr
+      [screen-inset-end] 0.25rem
+      [screen-end];
+  }
+}
+
+@media (min-width: 1280px) {
+  .article-grid {
+    grid-template-columns:
+      [screen-start] 0.25rem
+      [screen-inset-start] 0.75fr
+      [page-start] 2rem
+      [page-inset-start] minmax(1rem, 4rem)
+      [body-outset-start] 2rem
+      [body-start gutter-left-start] 1rem
+      [body-inset-start] minmax(10ch, 13ch)
+      [middle-start] minmax(10ch, 13ch)
+      [gutter-left-end] minmax(10ch, 13ch)
+      minmax(10ch, 13ch)
+      [gutter-right-start] minmax(10ch, 13ch)
+      [middle-end] minmax(10ch, 13ch)
+      [body-inset-end] 1rem
+      [body-end gutter-right-end] 2rem
+      [body-outset-end] minmax(1rem, 6rem)
+      [page-inset-end] 1.5rem
+      [page-end] 0.75fr
+      [screen-inset-end] 0.25rem
+      [screen-end];
+  }
+
+  main.article-grid {
+    box-sizing: border-box;
+    padding-left: 140px;
+  }
+}
+
+@media (min-width: 1536px) {
+  .article-grid {
+    grid-template-columns:
+      [screen-start] 0.5rem
+      [screen-inset-start] 0.75fr
+      [page-start] 2rem
+      [page-inset-start] minmax(1rem, 4rem)
+      [body-outset-start] 2rem
+      [body-start gutter-left-start] 1rem
+      [body-inset-start] minmax(10ch, 14ch)
+      [middle-start] minmax(10ch, 14ch)
+      [gutter-left-end] minmax(10ch, 14ch)
+      minmax(10ch, 14ch)
+      [gutter-right-start] minmax(10ch, 14ch)
+      [middle-end] minmax(10ch, 14ch)
+      [body-inset-end] 1rem
+      [body-end gutter-right-end] 2rem
+      [body-outset-end] minmax(1rem, 7rem)
+      [page-inset-end] 1.5rem
+      [page-end] 0.75fr
+      [screen-inset-end] 0.5rem
+      [screen-end];
+  }
+}
