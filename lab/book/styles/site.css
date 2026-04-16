@@ -187,6 +187,10 @@ html {
 }
 
 @media (min-width: 1280px) {
+  .myst-primary-sidebar-pointer {
+    transform: translateX(-10%);
+  }
+
   .article-grid {
     grid-template-columns:
       [screen-start] 0.25rem

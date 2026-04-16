@@ -1,55 +1,164 @@
 version: 1
-
 project:
   title: From Overlays to Operators
   subtitle: Relational Spatial Weights for Data-Driven Policy
   bibliography:
-    - references.bib
+  - references.bib
   toc:
-    - file: intro.md
-    - title: Introduction
+  - file: intro.md
+  - title: Introduction
+    children:
+    - file: content/01-foundations/lab-roadmap.md
       children:
-        - file: content/01-foundations/lab-roadmap.md
-          children:
-            - title: Step 1
-              url: /content/foundations/lab-roadmap#step-1-choose-the-two-layers
-            - title: Step 2
-              url: /content/foundations/lab-roadmap#step-2-build-the-incidence-matrix
-            - title: Step 3
-              url: /content/foundations/lab-roadmap#step-3-form-the-relweights-kernel
-            - title: Step 4
-              url: /content/foundations/lab-roadmap#step-4-lift-similarity-into-a-laplacian
-            - title: Step 5
-              url: /content/foundations/lab-roadmap#step-5-read-the-quadratic-form-as-roughness
-            - title: Step 6
-              url: /content/foundations/lab-roadmap#step-6-use-the-spectrum
-            - title: Worked Example
-              url: /content/foundations/lab-roadmap#worked-proposal-example
-            - title: What This Sets Up
-              url: /content/foundations/lab-roadmap#what-this-page-sets-up
-        - file: content/01-foundations/lab-roadmap-notebook.ipynb
-        - file: content/01-foundations/operator-state.md
-    - title: Core Modules
+      - title: 'Spatial Weights Matrix: Definition'
+        url: /content/foundations/lab-roadmap#spatial-weights-matrix-definition
+      - title: Properties and Types of Spatial Weights Matrices
+        url: /content/foundations/lab-roadmap#properties-and-types-of-spatial-weights-matrices
+      - title: 'Step 1: Choose the two layers'
+        url: /content/foundations/lab-roadmap#step-1-choose-the-two-layers
+      - title: 'Step 2: Build the incidence matrix'
+        url: /content/foundations/lab-roadmap#step-2-build-the-incidence-matrix
+      - title: 'Step 3: Form the RelWeights kernel'
+        url: /content/foundations/lab-roadmap#step-3-form-the-relweights-kernel
+      - title: 'Step 4: Lift similarity into a Laplacian'
+        url: /content/foundations/lab-roadmap#step-4-lift-similarity-into-a-laplacian
+      - title: 'Step 5: Read the quadratic form as roughness'
+        url: /content/foundations/lab-roadmap#step-5-read-the-quadratic-form-as-roughness
+      - title: 'Step 6: Use the spectrum'
+        url: /content/foundations/lab-roadmap#step-6-use-the-spectrum
+      - title: Worked proposal example
+        url: /content/foundations/lab-roadmap#worked-proposal-example
+      - title: What this page sets up
+        url: /content/foundations/lab-roadmap#what-this-page-sets-up
+    - file: content/01-foundations/lab-roadmap-notebook.ipynb
+    - file: content/01-foundations/operator-state.md
       children:
-        - file: content/02-build/build.md
-        - file: content/03-export/export.md
-        - file: content/04-spectral/spectral.md
-        - file: content/05-diagnostics/diagnostics.md
-        - file: content/06-externalities/externalities.md
-        - file: content/07-interpolation/interpolation.md
-        - file: content/08-simulate/simulate.md
-    - title: References
+      - title: 1. Incidence matrices
+        url: /content/foundations/operator-state#1-incidence-matrices
+      - title: 2. RelWeights matrix
+        url: /content/foundations/operator-state#2-relweights-matrix
+      - title: 3. Laplacian matrix
+        url: /content/foundations/operator-state#3-laplacian-matrix
+      - title: 4. Quadratic form identity
+        url: /content/foundations/operator-state#4-quadratic-form-identity
+      - title: 5. Positive semidefiniteness
+        url: /content/foundations/operator-state#5-positive-semidefiniteness
+      - title: 6. Nullspace property
+        url: /content/foundations/operator-state#6-nullspace-property
+      - title: Minimal construction code
+        url: /content/foundations/operator-state#minimal-construction-code
+      - title: Source thread
+        url: /content/foundations/operator-state#source-thread
+  - title: Core Modules
+    children:
+    - file: content/02-build/build.md
       children:
-        - file: content/09-references/references.md
-
+      - title: Module question
+        url: /content/build/build#module-question
+      - title: Inputs
+        url: /content/build/build#inputs
+      - title: Outputs
+        url: /content/build/build#outputs
+      - title: Theory block
+        url: /content/build/build#theory-block
+      - title: Notebook anchor
+        url: /content/build/build#notebook-anchor
+      - title: Assets to add
+        url: /content/build/build#assets-to-add
+    - file: content/03-export/export.md
+      children:
+      - title: Module question
+        url: /content/export/export#module-question
+      - title: Planned outputs
+        url: /content/export/export#planned-outputs
+      - title: Design note
+        url: /content/export/export#design-note
+      - title: Notebook anchor
+        url: /content/export/export#notebook-anchor
+      - title: Assets to add
+        url: /content/export/export#assets-to-add
+    - file: content/04-spectral/spectral.md
+      children:
+      - title: Module question
+        url: /content/spectral/spectral#module-question
+      - title: Objects
+        url: /content/spectral/spectral#objects
+      - title: Theory block
+        url: /content/spectral/spectral#theory-block
+      - title: Notebook anchor
+        url: /content/spectral/spectral#notebook-anchor
+      - title: Assets to add
+        url: /content/spectral/spectral#assets-to-add
+    - file: content/05-diagnostics/diagnostics.md
+      children:
+      - title: Module question
+        url: /content/diagnostics/diagnostics#module-question
+      - title: Candidate weights
+        url: /content/diagnostics/diagnostics#candidate-weights
+      - title: Diagnostics
+        url: /content/diagnostics/diagnostics#diagnostics
+      - title: Notebook anchor
+        url: /content/diagnostics/diagnostics#notebook-anchor
+      - title: Assets to add
+        url: /content/diagnostics/diagnostics#assets-to-add
+    - file: content/06-externalities/externalities.md
+      children:
+      - title: Module question
+        url: /content/externalities/externalities#module-question
+      - title: Model families
+        url: /content/externalities/externalities#model-families
+      - title: Theory block
+        url: /content/externalities/externalities#theory-block
+      - title: Notebook anchor
+        url: /content/externalities/externalities#notebook-anchor
+      - title: Assets to add
+        url: /content/externalities/externalities#assets-to-add
+    - file: content/07-interpolation/interpolation.md
+      children:
+      - title: Module question
+        url: /content/interpolation/interpolation#module-question
+      - title: Modes
+        url: /content/interpolation/interpolation#modes
+      - title: Methods
+        url: /content/interpolation/interpolation#methods
+      - title: Outputs
+        url: /content/interpolation/interpolation#outputs
+      - title: Notebook anchor
+        url: /content/interpolation/interpolation#notebook-anchor
+      - title: Assets to add
+        url: /content/interpolation/interpolation#assets-to-add
+    - file: content/08-simulate/simulate.md
+      children:
+      - title: Module question
+        url: /content/simulate/simulate#module-question
+      - title: Capabilities
+        url: /content/simulate/simulate#capabilities
+      - title: Notebook anchor
+        url: /content/simulate/simulate#notebook-anchor
+      - title: Assets to add
+        url: /content/simulate/simulate#assets-to-add
+  - title: References
+    children:
+    - file: content/09-references/references.md
+      children:
+      - title: Local papers
+        url: /content/references/references#local-papers
+      - title: 'Embedded PDF: Laplacians as Spatial Operators'
+        url: /content/references/references#embedded-pdf-laplacians-as-spatial-operators
+      - title: 'Embedded PDF: NYU Proposal'
+        url: /content/references/references#embedded-pdf-nyu-proposal
+      - title: Core documentation links
+        url: /content/references/references#core-documentation-links
+      - title: Next reference additions
+        url: /content/references/references#next-reference-additions
 site:
   template: book-theme
   title: From Overlays to Operators
   nav:
-    - title: GitHub
-      url: https://github.com/
-    - title: Colab
-      url: https://colab.research.google.com/
+  - title: GitHub
+    url: https://github.com/
+  - title: Colab
+    url: https://colab.research.google.com/
   actions: []
   options:
     folders: true
