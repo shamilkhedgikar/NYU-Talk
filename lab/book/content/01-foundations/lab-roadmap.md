@@ -10,9 +10,9 @@ kernelspec:
 ---
 # Defining RelWeights
 
-RelWeights is easiest to understand as an extension of the spatial weights tradition. Before constructing a relational operator from overlays, it helps to state more formally what a spatial weights matrix is, what assumptions it carries, and how different neighborhood rules encode different theories of interaction.
+RelWeights is easiest to understand as an extension of the spatial weights tradition. Before constructing a relational operator from overlays, it helps to understand more formally what a spatial weights matrix is, what assumptions it carries, and why it is useful.
 
-## Spatial Weights Matrix: Definition
+## Spatial Weights Matrix
 
 Let $S = \{1, \ldots, n\}$ denote a set of spatial units. A spatial weights matrix is an $n \times n$ matrix
 
@@ -28,9 +28,9 @@ $$
 
 for each row $j$. Row-standardization is useful because it makes different weighting schemes more directly comparable, but it is a convention rather than a universal requirement. In practice, spatial weights may be binary, row-standardized, distance-decayed, kernel-smoothed, or left unstandardized until a later modeling stage.
 
-$W$ captures the structural assumption about how spatial dependence propagates. Choosing $W$ means choosing what counts as a neighbor, how strongly neighbors matter, and whether influence is local, directional, group-based, or layered across multiple supports.
+$W$ captures some structural assumptions about how spatial dependence propagates. Choosing $W$ means choosing what counts as a neighbor, how strongly neighbors matter, and whether influence is local, directional, group-based, or layered across multiple supports.
 
-## Properties and Types of Spatial Weights Matrices
+## Properties and Types
 
 Several implications follow from this broader definition:
 
@@ -53,7 +53,7 @@ Common contiguity structures for areal data: rook, bishop, and queen criteria in
 
 ```
 
-The broader geographic data science literature emphasizes several practical properties of these matrices. 
+The broader geographic data science literature emphasizes several practical properties of these matrices.
 
 - First, the same spatial configuration can be represented either as a sparse neighbor list or as a dense matrix, but sparse storage is usually preferable because most entries are zero.
 - Second, density matters: some weighting rules create few links while others create many, and that affects both interpretation and computation.
@@ -65,9 +65,10 @@ Beyond contiguity, several other families of weights can be defined based on var
 
 ```{figure} ../../assets/images/weights-2.jpg
 :width: 100%
-:name: fig-contiguity-weights
+:name: fig-distance-block-kernel-weights
 
 Beyond contiguity, spatial weights can also be induced by distance-decay, shared group membership, and continuous kernel functions.
+
 ```
 
 - distance-based weights define neighbors as a function of separation in space rather than shared boundaries
@@ -83,7 +84,7 @@ See [@bavaud1998models] for a more advanced treatment of constructing spatial we
 :width: 100%
 :name: fig-datatype-weights
 
-
+Spatial weights choice also changes based on the type of data being analyzed. 
 ```
 
 ### Graph Objects
@@ -92,12 +93,11 @@ See [@bavaud1998models] for a more advanced treatment of constructing spatial we
 
 Each observation is a node, and each non-zero weight is an edge or tie in the graph. The matrix is always indexed by the observational units, but the visual ordering of rows and columns is arbitrary. What matters is the mapping between units and indices, not the particular row order printed on the page. Because most pairs are not neighbors, weights are usually stored sparsely by recording only the non-zero links.
 
-Thus, even when a weights matrix appears to be a simple technical choice, it remains a substantive modeling decision.
+**Even when a weights matrix appears to be a simple technical choice, it remains a substantive modeling decision.**
 
-We start from that broader view of spatial weights and then ask how to define a more flexible operator from overlays. The proposal frames the method as a way to convert layered spatial intersections into reusable operators, so the same construction can support diagnostics, smoothing, spectral analysis, and policy interpretation. In that framing, the geometry that matters is inherited support in $\beta$, not only shared boundaries in $\alpha$.
+We start from that broader view of spatial weights and then ask how to define a more flexible operator from overlays. We frame this problem as one of **converting layered spatial intersections into a reusable operator**, so the same operator can support diagnostics, smoothing, decomposition(s), and policy interpretation. In that framing, the geometry that matters is inherited support in $\beta$ in addition to the shared boundaries in $\alpha$.
 
 ## RelWeights
-Now we ask the question of what happens when we consider the idea that overlays interacting with each other. More formally, 
 
 Let $\alpha = \{\alpha_1, \ldots, \alpha_n\}$ denote the analysis layer and let $\beta = \{\beta_1, \ldots, \beta_m\}$ denote the contextual or inherited support layer. Typical examples are:
 
@@ -105,20 +105,22 @@ Let $\alpha = \{\alpha_1, \ldots, \alpha_n\}$ denote the analysis layer and let 
 - tracts over school catchments
 - neighborhoods over policy zones
 
+The broader associativeness we seek from RelWeights is that several distinct contextual layers can be inherited onto the same analysis layer without first forcing them into a common geography. In that sense, overlays become a way of accumulating relational support: different supports can all contribute structure on $\alpha$, even when they do not share the same boundaries or scale.
+
 The key design choice is that $\beta$ defines the support pattern that will later induce similarity among the $\alpha$ units.
 
-```{figure} ../../assets/images/config-1.jpg
-:width: 100%
-:name: fig-datatype-weights
+```{figure} ../../assets/images/config-1.png
+:width: 40%
+:name: fig-alpha-beta-config
 
-Here, $\alpha$ can be thought of 
+$\alpha$ (Red) and $\beta$ (Blue) represent two different units of analysis (extendable to *n* layers). We are interested in transferring the similarities.  
 ```
 
-### Step 1: Build the incidence matrix
+### Building the incidence matrix
 
-The reference note starts with two versions of the incidence matrix $B$.
+We can think of two ways to capture the intersection relationship:
 
-Binary support:
+1.Binary support:
 
 $$
 B_{\mathrm{bin}}(i,k) =
@@ -128,7 +130,7 @@ B_{\mathrm{bin}}(i,k) =
 \end{cases}
 $$
 
-Area-overlap support:
+2.Area-overlap support:
 
 $$
 B_{\mathrm{area}}(i,k) = \frac{|\alpha_i \cap \beta_k|}{|\alpha_i|}
@@ -146,9 +148,31 @@ $$
 B_{\mathrm{bin}}(i,k) = \mathbf{1}\!\left(B_{\mathrm{area}}(i,k) > 0\right)
 $$
 
-This is the point where an overlay becomes algebraic. Once the intersection structure is in $B$, the rest of the operator stack is matrix construction.
+:::{note} Note: Notation
+:class: dropdown
 
-### Step 2: Form the RelWeights kernel
+Here $i$ indexes a unit in the analysis layer $\alpha$, and $k$ indexes a unit in the inherited support layer $\beta$.
+
+- $B_{\mathrm{area}}(i,k)$ is the share of $\alpha_i$ covered by $\beta_k$
+- $\mathbf{1}(\cdot)$ is the indicator function: it equals **1** when the condition inside is true and **0** otherwise
+- We use (i,k) indices to differentiate our cross-layer incidence matrix from $\mathrm{W_{ij}}$
+
+So essentially:
+
+"Set the binary incidence entry to `1` whenever the area-overlap entry is positive."
+
+In other words, $B_{\mathrm{bin}}$ forgets *how much* overlap there is and keeps only whether any overlap exists at all. It is therefore the support pattern of $B_{\mathrm{area}}$: a yes/no version of the same overlay relationship.
+:::
+
+:::{important} Note: Why the incidence matrix matters
+:class: dropdown
+
+The dimensionality of the incidence matrix is part of the construction. If $\alpha$ has $n$ units and $\beta$ has $m$ units, then $B \in \mathbb{R}^{n \times m}$ is a cross-layer object: its rows index units in $\alpha$ and its columns index units in $\beta$. That is exactly what lets it record which $\alpha_i$ inherits support from which $\beta_k$.
+
+By contrast, adjacency matrices live within layers. $A_{\alpha} \in \mathbb{R}^{n \times n}$ only tells us which $\alpha$ units touch other $\alpha$ units, and $A_{\beta} \in \mathbb{R}^{m \times m}$ only tells us which $\beta$ units touch other $\beta$ units. Those square graphs do not contain the overlay information needed to build a cross-layer similarity on $\alpha$. That missing information lives in $B$, which is why RelWeights is built from $B B^{\top}$ rather than from $A_{\alpha}$ and $A_{\beta}$ alone.
+:::
+
+### Form the RelWeights kernel
 
 The relational similarity matrix is built from shared support:
 
@@ -164,14 +188,14 @@ $$
 
 before diagonal removal. In words, $R_{ij}$ measures how much contextual support units $\alpha_i$ and $\alpha_j$ inherit in common through $\beta$.
 
-The reference note emphasizes the main properties immediately:
+There are some very interesting properties 
 
 - $R_{ij} \ge 0$
 - $R$ is symmetric
 - $\operatorname{rank}(R) \le \operatorname{rank}(B)$
 - $B B^{\top}$ is positive semidefinite before the diagonal is removed
 
-## Step 4: Lift similarity into a Laplacian
+## The Laplacian Operator
 
 Define the relational degree matrix from the row sums of $R$:
 
@@ -193,7 +217,7 @@ $$
 
 This is the operator form that the rest of the lab will reuse.
 
-## Step 5: Read the quadratic form as roughness
+## Quadratic Form of the Laplacian
 
 For any signal $x \in \mathbb{R}^n$, the core identity is
 
@@ -222,88 +246,3 @@ That gives the standard spectral picture:
 - the zero mode is constant over connected relational support
 - small eigenvalues correspond to smooth relational variation
 - larger eigenvalues capture oscillatory or high-friction variation
-
-## Worked proposal example
-
-The proposal gives a compact $4 \times 4$ binary example with districts $\alpha = \{A, B, C, D\}$ and contextual regimes $\beta = \{X, Y, Z, W\}$:
-
-- $A$ intersects $X, Y$
-- $B$ intersects $X, Y, Z$
-- $C$ intersects $W, Y, Z$
-- $D$ intersects $W, Z$
-
-That yields
-
-$$
-B =
-\begin{bmatrix}
-1 & 1 & 0 & 0 \\
-1 & 1 & 1 & 0 \\
-0 & 1 & 1 & 1 \\
-0 & 0 & 1 & 1
-\end{bmatrix}
-$$
-
-and therefore
-
-$$
-R =
-\begin{bmatrix}
-0 & 2 & 1 & 0 \\
-2 & 0 & 2 & 1 \\
-1 & 2 & 0 & 2 \\
-0 & 1 & 2 & 0
-\end{bmatrix},
-\qquad
-D_R =
-\begin{bmatrix}
-3 & 0 & 0 & 0 \\
-0 & 5 & 0 & 0 \\
-0 & 0 & 5 & 0 \\
-0 & 0 & 0 & 3
-\end{bmatrix}
-$$
-
-and
-
-$$
-L_R =
-\begin{bmatrix}
-3 & -2 & -1 & 0 \\
--2 & 5 & -2 & -1 \\
--1 & -2 & 5 & -2 \\
-0 & -1 & -2 & 3
-\end{bmatrix}
-$$
-
-```{code-cell}
-import numpy as np
-
-B = np.array(
-    [
-        [1, 1, 0, 0],
-        [1, 1, 1, 0],
-        [0, 1, 1, 1],
-        [0, 0, 1, 1],
-    ],
-    dtype=float,
-)
-
-gram = B @ B.T
-R = gram - np.diag(np.diag(gram))
-D_R = np.diag(R.sum(axis=1))
-L_R = D_R - R
-
-B, R, L_R
-```
-
-## What this page sets up
-
-This six-step construction is the backbone of the rest of the lab:
-
-- `build` will construct $B$, $R$, and $L_R$ from real overlays
-- `export` will move those operators into PySAL and related formats
-- `spectral` will study the eigenstructure of $L_R$
-- `diagnostics` and `externalities` will use the same operator to test and interpret dependence
-
-The companion notebook now turns the same derivation into executable matrix checks.

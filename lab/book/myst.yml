@@ -10,26 +10,18 @@ project:
     children:
     - file: content/01-foundations/lab-roadmap.md
       children:
-      - title: 'Spatial Weights Matrix: Definition'
-        url: /content/foundations/lab-roadmap#spatial-weights-matrix-definition
-      - title: Properties and Types of Spatial Weights Matrices
-        url: /content/foundations/lab-roadmap#properties-and-types-of-spatial-weights-matrices
-      - title: 'Step 1: Choose the two layers'
-        url: /content/foundations/lab-roadmap#step-1-choose-the-two-layers
-      - title: 'Step 2: Build the incidence matrix'
-        url: /content/foundations/lab-roadmap#step-2-build-the-incidence-matrix
-      - title: 'Step 3: Form the RelWeights kernel'
-        url: /content/foundations/lab-roadmap#step-3-form-the-relweights-kernel
-      - title: 'Step 4: Lift similarity into a Laplacian'
-        url: /content/foundations/lab-roadmap#step-4-lift-similarity-into-a-laplacian
-      - title: 'Step 5: Read the quadratic form as roughness'
-        url: /content/foundations/lab-roadmap#step-5-read-the-quadratic-form-as-roughness
+      - title: Spatial Weights Matrix
+        url: /content/foundations/lab-roadmap#spatial-weights-matrix
+      - title: Properties and Types
+        url: /content/foundations/lab-roadmap#properties-and-types
+      - title: RelWeights
+        url: /content/foundations/lab-roadmap#relweights
+      - title: The Laplacian Operator
+        url: /content/foundations/lab-roadmap#the-laplacian-operator
+      - title: Quadratic Form of the Laplacian
+        url: /content/foundations/lab-roadmap#quadratic-form-of-the-laplacian
       - title: 'Step 6: Use the spectrum'
         url: /content/foundations/lab-roadmap#step-6-use-the-spectrum
-      - title: Worked proposal example
-        url: /content/foundations/lab-roadmap#worked-proposal-example
-      - title: What this page sets up
-        url: /content/foundations/lab-roadmap#what-this-page-sets-up
     - file: content/01-foundations/lab-roadmap-notebook.ipynb
     - file: content/01-foundations/operator-state.md
       children:
