@@ -26,7 +26,8 @@ By the end of this lab, you should be able to:
 - explain the difference between an incidence matrix $B$, a contextual similarity matrix $R$, and a Laplacian $L_R$
 - build binary and area-share incidence matrices from two overlaid polygon layers
 - see how the same districts can be connected by inherited supports even when they are not immediate geographic neighbors
-- compute a relational Laplacian and evaluate a simple Laplacian energy for a demonstration signal
+- generate a support-level surface, aggregate it to districts, and compare geographic and relational Laplacian responses
+- interpret linear and quadratic Laplacian calculations and inspect the eigenvalue spectrum of the resulting operators
 
 ## Imports and configuration
 
@@ -594,6 +595,233 @@ def centered_laplacian_energy(values: np.ndarray, laplacian_df: pd.DataFrame) ->
     return float(z.T @ L @ z)
 
 
+def build_support_effects(supports: gpd.GeoDataFrame, area_crs: str = AREA_CRS) -> pd.DataFrame:
+    """Assign a deterministic scalar effect to each support polygon."""
+
+    supports_proj = supports[["support_id", "geometry"]].copy().to_crs(area_crs)
+    centroid_x = supports_proj.geometry.centroid.x
+    centroid_y = supports_proj.geometry.centroid.y
+    x_std = (centroid_x - centroid_x.mean()) / centroid_x.std(ddof=0)
+    y_std = (centroid_y - centroid_y.mean()) / centroid_y.std(ddof=0)
+    order = np.linspace(-1.0, 1.0, len(supports_proj))
+
+    effects = 0.9 * y_std - 0.55 * x_std + 0.35 * np.sin(np.pi * order)
+    return pd.DataFrame(
+        {
+            "support_id": supports_proj["support_id"].tolist(),
+            "support_effect": effects.to_numpy(dtype=float),
+        }
+    )
+
+
+def make_surface_grid(
+    layer: gpd.GeoDataFrame,
+    n_x: int = 90,
+    n_y: int = 90,
+    area_crs: str = AREA_CRS,
+) -> tuple[gpd.GeoDataFrame, np.ndarray, np.ndarray]:
+    """Create a regular projected grid over the study area and keep only interior points."""
+
+    projected = layer.to_crs(area_crs)
+    minx, miny, maxx, maxy = projected.total_bounds
+    xs = np.linspace(minx, maxx, n_x)
+    ys = np.linspace(miny, maxy, n_y)
+    xx, yy = np.meshgrid(xs, ys)
+    points = gpd.GeoDataFrame(
+        {"point_id": np.arange(xx.size), "x": xx.ravel(), "y": yy.ravel()},
+        geometry=gpd.points_from_xy(xx.ravel(), yy.ravel()),
+        crs=area_crs,
+    )
+
+    inside = points.geometry.intersects(projected.geometry.union_all())
+    points = points.loc[inside].copy()
+    return points, xx, yy
+
+
+def assign_surface_to_grid(
+    grid_points: gpd.GeoDataFrame,
+    supports: gpd.GeoDataFrame,
+    support_effects: pd.DataFrame,
+    districts: gpd.GeoDataFrame,
+    area_crs: str = AREA_CRS,
+) -> gpd.GeoDataFrame:
+    """Attach support-level surface values and district ids to interior grid points."""
+
+    supports_value = supports.merge(support_effects, on="support_id", how="left").to_crs(area_crs)
+    districts_proj = districts[["ac_id", "AC_NAME", "DIST_NAME", "geometry"]].copy().to_crs(area_crs)
+
+    support_hits = gpd.sjoin(
+        grid_points[["point_id", "x", "y", "geometry"]],
+        supports_value[["support_id", "support_effect", "geometry"]],
+        how="left",
+        predicate="intersects",
+    ).drop(columns=["index_right"])
+
+    support_summary = (
+        support_hits.groupby("point_id", as_index=False)
+        .agg(
+            x=("x", "first"),
+            y=("y", "first"),
+            geometry=("geometry", "first"),
+            support_count=("support_id", "nunique"),
+            support_effect=("support_effect", "mean"),
+        )
+    )
+
+    grid = gpd.GeoDataFrame(support_summary, geometry="geometry", crs=area_crs)
+    grid["support_effect"] = grid["support_effect"].fillna(0.0)
+    grid["support_count"] = grid["support_count"].fillna(0).astype(int)
+
+    grid = gpd.sjoin(
+        grid,
+        districts_proj,
+        how="left",
+        predicate="within",
+    ).drop(columns=["index_right"])
+
+    return grid
+
+
+def grid_to_surface_matrix(
+    grid_with_values: gpd.GeoDataFrame,
+    xx: np.ndarray,
+    yy: np.ndarray,
+    value_col: str = "support_effect",
+) -> np.ndarray:
+    """Project scattered grid values back onto a rectangular array for plotting."""
+
+    surface = np.full(xx.shape, np.nan, dtype=float)
+    x_lookup = {value: idx for idx, value in enumerate(xx[0, :])}
+    y_lookup = {value: idx for idx, value in enumerate(yy[:, 0])}
+
+    for _, row in grid_with_values.iterrows():
+        surface[y_lookup[row["y"]], x_lookup[row["x"]]] = float(row[value_col])
+
+    return surface
+
+
+def aggregate_surface_to_districts(
+    grid_with_values: gpd.GeoDataFrame,
+    districts: gpd.GeoDataFrame,
+    value_col: str = "support_effect",
+) -> pd.Series:
+    """Approximate district means by averaging surface values at interior grid points."""
+
+    district_means = (
+        grid_with_values.groupby("ac_id")[value_col]
+        .mean()
+        .reindex(districts["ac_id"])
+        .astype(float)
+    )
+    return district_means
+
+
+def linear_laplacian_response(values: np.ndarray, laplacian_df: pd.DataFrame, center: bool = True) -> np.ndarray:
+    """Return the linear Laplacian response Lx or Lz."""
+
+    vector = values - values.mean() if center else values.copy()
+    return laplacian_df.to_numpy(dtype=float) @ vector
+
+
+def quadratic_identity_from_weights(values: np.ndarray, weights_df: pd.DataFrame) -> float:
+    """Evaluate the half-sum identity 0.5 * sum_ij w_ij (z_i - z_j)^2."""
+
+    z = values - values.mean()
+    W = weights_df.to_numpy(dtype=float)
+    diff = z[:, None] - z[None, :]
+    return float(0.5 * np.sum(W * diff**2))
+
+
+def plot_surface_3d(
+    xx: np.ndarray,
+    yy: np.ndarray,
+    surface: np.ndarray,
+    title: str,
+) -> None:
+    """Render a gridded surface as a 3D plot."""
+
+    fig = plt.figure(figsize=(9, 7))
+    ax = fig.add_subplot(111, projection="3d")
+    ax.plot_surface(
+        xx / 1000.0,
+        yy / 1000.0,
+        np.ma.masked_invalid(surface),
+        cmap="viridis",
+        linewidth=0,
+        antialiased=True,
+        alpha=0.95,
+    )
+    ax.set_title(title)
+    ax.set_xlabel("Projected x (km)")
+    ax.set_ylabel("Projected y (km)")
+    ax.set_zlabel("Surface value")
+    plt.show()
+
+
+def plot_surface_2d(
+    xx: np.ndarray,
+    yy: np.ndarray,
+    surface: np.ndarray,
+    title: str,
+    cmap: str = "viridis",
+) -> None:
+    """Render a gridded surface in plan view."""
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    mesh = ax.pcolormesh(
+        xx / 1000.0,
+        yy / 1000.0,
+        np.ma.masked_invalid(surface),
+        shading="auto",
+        cmap=cmap,
+    )
+    fig.colorbar(mesh, ax=ax, label="Surface value")
+    ax.set_title(title)
+    ax.set_xlabel("Projected x (km)")
+    ax.set_ylabel("Projected y (km)")
+    plt.show()
+
+
+def plot_district_signal(
+    districts: gpd.GeoDataFrame,
+    signal_df: pd.DataFrame,
+    value_col: str,
+    title: str,
+    cmap: str = "viridis",
+) -> None:
+    """Map a district-level scalar signal."""
+
+    plot_frame = districts.merge(signal_df, on="ac_id", how="left")
+    ax = plot_frame.plot(
+        column=value_col,
+        cmap=cmap,
+        edgecolor="black",
+        linewidth=0.5,
+        legend=True,
+    )
+    minx, miny, maxx, maxy = plot_frame.total_bounds
+    padx = 0.05 * (maxx - minx)
+    pady = 0.05 * (maxy - miny)
+    ax.set_xlim(minx - padx, maxx + padx)
+    ax.set_ylim(miny - pady, maxy + pady)
+    ax.set_title(title)
+    ax.set_axis_off()
+    plt.show()
+
+
+def plot_eigen_spectrum(eigenvalues: np.ndarray, title: str, color: str) -> None:
+    """Plot the ordered Laplacian eigenvalues."""
+
+    ordered = np.sort(np.asarray(eigenvalues, dtype=float))
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+    ax.plot(np.arange(1, len(ordered) + 1), ordered, marker="o", color=color, linewidth=1.8)
+    ax.set_title(title)
+    ax.set_xlabel("Eigenvalue index")
+    ax.set_ylabel("Eigenvalue")
+    ax.grid(alpha=0.25)
+    plt.show()
+
+
 def plot_layer(
     layer: gpd.GeoDataFrame,
     color_column: str,
@@ -962,8 +1190,9 @@ signal = (
     (districts_proj["centroid_x"] - districts_proj["centroid_x"].mean())
     / districts_proj["centroid_x"].std(ddof=0)
 ).to_numpy(dtype=float)
+L_W = laplacian_from_weights(W_geo)
 energy_R = centered_laplacian_energy(signal, L_R)
-energy_W = centered_laplacian_energy(signal, laplacian_from_weights(W_geo))
+energy_W = centered_laplacian_energy(signal, L_W)
 
 print(f"Centered Laplacian energy under contextual R: {energy_R:,.2f}")
 print(f"Centered Laplacian energy under geographic {GEOGRAPHIC_LABEL.lower()} weights: {energy_W:,.2f}")
@@ -976,6 +1205,238 @@ These two energies are not on the same normalization scale, so the comparison is
 
 The support graph changes the notion of what counts as "smooth."
 
+## Generate a sub-basin surface
+
+The centroid-x signal above was only a warm-up. For the main operator workflow, we now create a simple scalar field directly on the inherited sub-basin layer. Each sub-basin receives one deterministic effect, and that effect is then treated as a contextual surface that districts inherit through clipping and averaging.
+
+```{code-cell} ipython3
+support_effects = build_support_effects(supports)
+supports_surface = supports.merge(support_effects, on="support_id", how="left")
+
+print("Support-level effects")
+print(support_effects.round(3).to_string(index=False))
+```
+
+```{code-cell} ipython3
+plot_layer(
+    supports_surface,
+    "support_effect",
+    "Sub-basin surface values before aggregation to districts",
+    cmap="viridis",
+    focus_bounds=study_bounds,
+)
+```
+
+At this stage the surface still lives on the inherited support layer. The next step is to sample it densely over the study area and then average those values within each district.
+
+## Sample and visualize the surface
+
+```{code-cell} ipython3
+grid_points, surface_xx, surface_yy = make_surface_grid(districts, n_x=110, n_y=110)
+surface_grid = assign_surface_to_grid(
+    grid_points=grid_points,
+    supports=supports,
+    support_effects=support_effects,
+    districts=districts,
+)
+surface_matrix = grid_to_surface_matrix(surface_grid, surface_xx, surface_yy)
+
+print(f"Interior grid points used for discretization: {len(surface_grid):,}")
+print("Support-count distribution at grid points")
+print(surface_grid["support_count"].value_counts().sort_index().to_string())
+```
+
+```{code-cell} ipython3
+plot_surface_2d(
+    surface_xx,
+    surface_yy,
+    surface_matrix,
+    "Support-level surface sampled on a regular grid",
+)
+```
+
+```{code-cell} ipython3
+plot_surface_3d(
+    surface_xx,
+    surface_yy,
+    surface_matrix,
+    "3D view of the inherited support surface",
+)
+```
+
+Because the underlying values are attached to sub-basins, the surface is piecewise constant on those supports. The 3D plot makes that especially clear: the contextual field is built from inherited spatial supports rather than from same-layer geographic smoothing.
+
+## Discretize the surface to district means
+
+To move from the support layer back to the district layer, we approximate
+
+$$
+\bar{x}_i = \frac{1}{|A_i|}\int_{A_i} x(s)\,ds
+$$
+
+by taking the mean of the gridded surface values that fall inside district $i$. This is the numerical version of clipping the surface to each district and averaging over the clipped area.
+
+```{code-cell} ipython3
+district_surface_mean = aggregate_surface_to_districts(
+    surface_grid,
+    districts,
+    value_col="support_effect",
+).fillna(0.0)
+
+district_signal = pd.DataFrame(
+    {
+        "ac_id": districts["ac_id"],
+        "surface_mean": district_surface_mean.to_numpy(dtype=float),
+    }
+)
+
+print("District-level surface summary")
+print(district_signal["surface_mean"].describe().round(3).to_string())
+```
+
+```{code-cell} ipython3
+plot_district_signal(
+    districts,
+    district_signal,
+    "surface_mean",
+    "District means obtained by clipping and averaging the support surface",
+    cmap="viridis",
+)
+```
+
+This district map is the discretized signal that we will now push through both the geographic Laplacian and the RelWeights Laplacian.
+
+## Run the linear Laplacian form on the discretized signal
+
+```{code-cell} ipython3
+district_surface_values = district_surface_mean.to_numpy(dtype=float)
+linear_response_W = linear_laplacian_response(district_surface_values, L_W, center=True)
+linear_response_R = linear_laplacian_response(district_surface_values, L_R, center=True)
+
+linear_response_df = pd.DataFrame(
+    {
+        "ac_id": districts["ac_id"],
+        f"linear_{GEOGRAPHIC_CONTIGUITY}": linear_response_W,
+        "linear_relweights": linear_response_R,
+    }
+)
+
+print("First ten district-level linear responses")
+print(linear_response_df.head(10).round(3).to_string(index=False))
+```
+
+```{code-cell} ipython3
+plot_district_signal(
+    districts,
+    linear_response_df,
+    f"linear_{GEOGRAPHIC_CONTIGUITY}",
+    f"Linear Laplacian response under {GEOGRAPHIC_LABEL} contiguity",
+    cmap="coolwarm",
+)
+```
+
+```{code-cell} ipython3
+plot_district_signal(
+    districts,
+    linear_response_df,
+    "linear_relweights",
+    "Linear Laplacian response under RelWeights",
+    cmap="coolwarm",
+)
+```
+
+The linear form $Lx$ is a district-by-district imbalance diagnostic. Positive values indicate districts whose surface mean sits above the corresponding weighted neighborhood average; negative values indicate districts below that neighborhood average.
+
+## Run the quadratic Laplacian form on the discretized signal
+
+```{code-cell} ipython3
+z_surface = district_surface_values - district_surface_values.mean()
+
+quadratic_W_matrix = centered_laplacian_energy(district_surface_values, L_W)
+quadratic_R_matrix = centered_laplacian_energy(district_surface_values, L_R)
+quadratic_W_linear = float(z_surface @ linear_response_W)
+quadratic_R_linear = float(z_surface @ linear_response_R)
+quadratic_W_identity = quadratic_identity_from_weights(district_surface_values, W_geo)
+quadratic_R_identity = quadratic_identity_from_weights(district_surface_values, R_binary)
+
+quadratic_summary = pd.DataFrame(
+    {
+        "operator": [GEOGRAPHIC_LABEL, "RelWeights"],
+        "z' L z": [quadratic_W_matrix, quadratic_R_matrix],
+        "z' (L z)": [quadratic_W_linear, quadratic_R_linear],
+        "0.5 sum w_ij (z_i - z_j)^2": [quadratic_W_identity, quadratic_R_identity],
+    }
+)
+
+print(quadratic_summary.round(4).to_string(index=False))
+```
+
+```{code-cell} ipython3
+fig, ax = plt.subplots(figsize=(6.5, 4.5))
+ax.bar(
+    quadratic_summary["operator"],
+    quadratic_summary["z' L z"],
+    color=["#2563eb", "#ea580c"],
+    width=0.65,
+)
+ax.set_title("Quadratic Laplacian energy of the discretized district signal")
+ax.set_ylabel("Energy")
+ax.grid(axis="y", alpha=0.25)
+plt.show()
+```
+
+The three columns in the summary should agree up to floating-point tolerance. That is the key identity:
+
+$$
+z^{\top} L z
+=
+z^{\top}(Lz)
+=
+\frac{1}{2}\sum_{i,j} w_{ij}(z_i-z_j)^2.
+$$
+
+The matrix product, the dot product of the centered signal with its linear Laplacian response, and the pairwise difference identity are all the same quadratic energy written three different ways.
+
+## Compute and visualize the eigenvalue spectra
+
+```{code-cell} ipython3
+eigvals_W = np.linalg.eigvalsh(L_W.to_numpy(dtype=float))
+eigvals_R = np.linalg.eigvalsh(L_R.to_numpy(dtype=float))
+
+eigen_summary = pd.DataFrame(
+    {
+        "operator": [GEOGRAPHIC_LABEL, "RelWeights"],
+        "lambda_min": [eigvals_W.min(), eigvals_R.min()],
+        "lambda_2": [np.sort(eigvals_W)[1], np.sort(eigvals_R)[1]],
+        "lambda_max": [eigvals_W.max(), eigvals_R.max()],
+        "near_zero_count": [
+            int(np.sum(np.isclose(eigvals_W, 0.0, atol=1e-8))),
+            int(np.sum(np.isclose(eigvals_R, 0.0, atol=1e-8))),
+        ],
+    }
+)
+
+print(eigen_summary.round(6).to_string(index=False))
+```
+
+```{code-cell} ipython3
+plot_eigen_spectrum(
+    eigvals_W,
+    f"Ordered eigenvalues of the {GEOGRAPHIC_LABEL} Laplacian",
+    color="#2563eb",
+)
+```
+
+```{code-cell} ipython3
+plot_eigen_spectrum(
+    eigvals_R,
+    "Ordered eigenvalues of the RelWeights Laplacian",
+    color="#ea580c",
+)
+```
+
+The eigenvalues summarize the geometry of the operator. Small eigenvalues correspond to smooth modes of variation under the chosen graph, while larger eigenvalues correspond to sharper oscillations. Comparing the two spectra shows directly how inherited supports change the notion of smoothness relative to first-order geographic contiguity.
+
 ## What this lab established
 
 This notebook implemented the construction chain
@@ -984,7 +1445,14 @@ $$
 \text{overlay} \longrightarrow B \longrightarrow R \longrightarrow L_R
 $$
 
-using a real polygon overlay example derived from the RelWeights repository. The key takeaway is not only that RelWeights can be computed from real data, but that they define a different neighborhood concept from same-layer adjacency.
+using a real polygon overlay example derived from the RelWeights repository. It then pushed a support-level surface through the full operator workflow:
+
+- generate a scalar field on the inherited sub-basin layer
+- sample that surface and average it back to district means
+- compare district-level linear and quadratic Laplacian responses under geographic and contextual graphs
+- inspect the eigenvalue spectrum of each operator
+
+The key takeaway is not only that RelWeights can be computed from real data, but that they define a different neighborhood concept, a different roughness operator, and a different spectral notion of smoothness from same-layer adjacency.
 
 ## Exercises
 
