@@ -157,24 +157,23 @@ Here $i$ indexes a unit in the analysis layer $\alpha$, and $k$ indexes a unit i
 - $\mathbf{1}(\cdot)$ is the indicator function: it equals **1** when the condition inside is true and **0** otherwise
 - We use (i,k) indices to differentiate our cross-layer incidence matrix from $\mathrm{W_{ij}}$
 
-So essentially:
+Thus, we the binary incidence entry to **1** whenever the area-overlap entry is positive. It is therefore the support pattern of $B_{\mathrm{area}}$: a yes/no version of the same overlay relationship leading to an adjacency matrix for the system.
 
-"Set the binary incidence entry to `1` whenever the area-overlap entry is positive."
-
-In other words, $B_{\mathrm{bin}}$ forgets *how much* overlap there is and keeps only whether any overlap exists at all. It is therefore the support pattern of $B_{\mathrm{area}}$: a yes/no version of the same overlay relationship.
 :::
 
-:::{important} Note: Why the incidence matrix matters
+:::{note} The Incidence Matrix
 :class: dropdown
 
 The dimensionality of the incidence matrix is part of the construction. If $\alpha$ has $n$ units and $\beta$ has $m$ units, then $B \in \mathbb{R}^{n \times m}$ is a cross-layer object: its rows index units in $\alpha$ and its columns index units in $\beta$. That is exactly what lets it record which $\alpha_i$ inherits support from which $\beta_k$.
 
-By contrast, adjacency matrices live within layers. $A_{\alpha} \in \mathbb{R}^{n \times n}$ only tells us which $\alpha$ units touch other $\alpha$ units, and $A_{\beta} \in \mathbb{R}^{m \times m}$ only tells us which $\beta$ units touch other $\beta$ units. Those square graphs do not contain the overlay information needed to build a cross-layer similarity on $\alpha$. That missing information lives in $B$, which is why RelWeights is built from $B B^{\top}$ rather than from $A_{\alpha}$ and $A_{\beta}$ alone.
+By contrast, adjacency matrices live within layers. $A_{\alpha} \in \mathbb{R}^{n \times n}$ only tells us which $\alpha$ units touch other $\alpha$ units, and $A_{\beta} \in \mathbb{R}^{m \times m}$ only tells us which $\beta$ units touch other $\beta$ units. Those square graphs do not contain the overlay information needed to build a cross-layer similarity on $\alpha$. That missing information lives in $B$, which is why RelWeights are built from $B B^{\top}$ rather than from $A_{\alpha}$ and $A_{\beta}$ alone.
+
+**In fact it can be proved that the incidence matrix cannot be derived simply from the independent adjacency.**
 :::
 
-### Form the RelWeights kernel
+### The RelWeights kernel
 
-The relational similarity matrix is built from shared support:
+The RelWeights matrix is built from shared support by using the Gram Matrix $B B^{\top}$ and is :
 
 $$
 R = B B^{\top} - \operatorname{diag}(B B^{\top})
@@ -188,12 +187,30 @@ $$
 
 before diagonal removal. In words, $R_{ij}$ measures how much contextual support units $\alpha_i$ and $\alpha_j$ inherit in common through $\beta$.
 
-There are some very interesting properties 
+$R_{ij}$ has some very nice properties
 
 - $R_{ij} \ge 0$
 - $R$ is symmetric
-- $\operatorname{rank}(R) \le \operatorname{rank}(B)$
+- $\operatorname{rank}(B B^{\top}) = \operatorname{rank}(B)$ before diagonal removal
 - $B B^{\top}$ is positive semidefinite before the diagonal is removed
+
+:::{note} Note: Why these properties hold
+:class: dropdown
+
+- Each entry of $B$ is nonnegative, so each product $B_{ik} B_{jk}$ is nonnegative as well. Summing over $k$ gives $(B B^{\top})_{ij} \ge 0$, and subtracting the diagonal only replaces $R_{ii}$ by zero, so the off-diagonal entries of $R$ remain nonnegative.
+
+- Symmetry follows from the Gram form: $(B B^{\top})^{\top} = B B^{\top}$. Removing the diagonal preserves symmetry, so $R_{ij} = R_{ji}$.
+
+- The rank statement is cleanest before diagonal removal. For any matrix $B$, the matrices $B$ and $B B^{\top}$ have the same nullspace on the left-hand side, so the Gram matrix $B B^{\top}$ has the same rank as $B$. Diagonal removal can change rank, which is why the equality is stated for $B B^{\top}$ rather than for $R$ itself.
+
+- Positive semidefiniteness is immediate from the quadratic form. For any $x \in \mathbb{R}^n$,
+
+$$
+x^{\top} B B^{\top} x = (B^{\top} x)^{\top}(B^{\top} x) = \|B^{\top} x\|_2^2 \ge 0,
+$$
+
+so $B B^{\top}$ is positive semidefinite.
+:::
 
 ## The Laplacian Operator
 
@@ -215,27 +232,116 @@ $$
 (L_R)_{ij} = \delta_{ij} \sum_k R_{ik} - R_{ij}
 $$
 
-This is the operator form that the rest of the lab will reuse.
+Here $\delta_{ij}$ is the Kronecker delta: it equals $1$ when $i=j$ and $0$ otherwise. So the first term only contributes on the diagonal, which means $(L_R)_{ii}$ stores the relational degree of unit $\alpha_i$, while the off-diagonal entries are just $-(R_{ij})$.
+
+This is the operator form that the rest of the lab will mostly rely on.
+
+:::{note} Note: Comparing $B B^{\top}$ and $L_R$
+:class: dropdown
+
+Both $B B^{\top}$ and $L_R$ are symmetric positive semidefinite, but they have different interpretations.
+
+- $B B^{\top}$ is a Gram matrix. It accumulates shared inherited support, so large entries mean that two $\alpha$ units overlap many of the same $\beta$ supports. Its diagonal records self-similarity.
+- $L_R = D_R - R$ is a Laplacian. It converts similarity into a roughness operator that penalizes differences across related units. Its rows sum to zero, and the constant vector lies in its nullspace.
+
+So $B B^{\top}$ is the similarity object, whereas $L_R$ is the smoothing or variation-penalty object built from that similarity structure.
+:::
+
+## Linear Form of the Laplacian
+
+Applying the operator to a vector $x \in \mathbb{R}^n$ gives
+
+$$
+(L_R x)_i = \sum_j R_{ij}(x_i - x_j).
+$$
+
+This is the **linear form** of the Laplacian: a node-level expression that tells us how far unit $i$ sits above or below its contextual neighborhood under the RelWeights graph. Expanding it back into degree-minus-similarity form gives
+
+$$
+(L_R x)_i = \left(\sum_j R_{ij}\right)x_i - \sum_j R_{ij}x_j,
+$$
+
+so it compares the value at unit $i$ to the weighted values carried by the units to which it is relationally tied.
+
+The contrast with ordinary spatial lags is useful:
+
+| Operator | Formula | Interpretation |
+| ----- | ----- | ----- |
+| $Wx$ | $(Wx)_i = \sum_j W_{ij}x_j$ | Standard spatial lag. If $W$ is row-standardized, this is the neighborhood average under the chosen spatial weights matrix; otherwise it is a weighted neighborhood exposure. |
+| $Rx$ | $(Rx)_i = \sum_j R_{ij}x_j$ | Contextual spatial lag induced by shared inherited support. If $R$ is normalized, it is a contextual neighborhood average; otherwise it accumulates weighted support from related units. |
+| $L_Rx$ | $(L_R x)_i = \sum_j R_{ij}(x_i - x_j)$ | Contextual deviation from neighbors. This is not an average of surrounding values, but the signed local imbalance of unit $i$ relative to its contextual neighborhood. |
+
+- $Wx$ and $Rx$ are **lag operators**: they push neighboring values onto unit $i$.
+- $L_Rx$ is a **difference operator**: it measures disagreement between unit $i$ and the values around it.
+- Constant vectors pass through lags but are annihilated by the Laplacian, since $L_R \mathbf{1}=0$.
+
+So the ordinary lag asks, "what do my neighbors look like?", while the Laplacian asks, "how far am I from what my neighbors imply?"
 
 ## Quadratic Form of the Laplacian
 
-For any signal $x \in \mathbb{R}^n$, the core identity is
+For any vector $x \in \mathbb{R}^n$, the scalar
+
+$$
+E_R(x) := x^{\top} L_R x
+$$
+
+is the **Relational Laplacian Energy** (a physical framing) or **Roughness** of that vector across the combined supports of the base and overlay layers. It is an aggregate object - a scalar. So rather than describing one pair of units at a time, it collapses the entire pattern of weighted disagreement into a single number.
+
+This scalar should be interpreted as a measure over the combined (base + inherited) support structure. It is small when nearby values are smooth over strong relational ties, and it becomes large when units that share substantial contextual support take very different values. In combined supports where the vector values are constant, the value vanishes.
+
+Similar to the linear form, the aggregate can be written as a weighted sum of squared pairwise differences.
+
+For any vector $x \in \mathbb{R}^n$, the core identity is
 
 $$
 x^{\top} L_R x = \frac{1}{2} \sum_{i,j} R_{ij} (x_i - x_j)^2
 $$
 
-This is the most useful interpretation to keep in mind while building the lab. The quadratic form is an energy functional: it is small when values vary smoothly across units that share inherited support, and large when strongly related units diverge.
+The right hand side is very similar to local form of **Geary's C** (without variance normalization), a measure of global spatial autocorrelation based on squared differences across all weighted neighbor pairs. In fact $L_R$ based on our RelWeights can be interpreted as a contextual autocorrelation statistic with appropriate variance normalization. We will explore this idea in Lab 2: Simulating Structural Variations.
 
-## Step 6: Use the spectrum
+:::{note} Note: Proof of the quadratic identity
+:class: dropdown
 
-Because $(x_i - x_j)^2 \ge 0$ and $R_{ij} \ge 0$, the reference note shows that
+It helps to start from the ordinary Euclidean case: $\|x\|_2^2 = x^{\top} I x$. More generally, a symmetric positive semidefinite matrix $M$ defines a weighted quadratic size
+
+$$
+\|x\|_M^2 := x^{\top} M x.
+$$
+
+If $M$ is positive definite, this is a genuine norm. If $M$ is only positive semidefinite, it is a seminorm. Laplacians fall in the second category, since constant vectors represent zero *roughness*. Thus $x^{\top} L_R x$ should be read as a relational roughness seminorm: it measures variation in $x$ across the support encoded by $R$.
+
+To prove the identity, expand from $L_R = D_R - R$:
+
+$$
+x^{\top} L_R x = x^{\top} D_R x - x^{\top} R x
+= \sum_i \left(\sum_j R_{ij}\right)x_i^2 - \sum_{i,j} R_{ij} x_i x_j.
+$$
+
+Using symmetry of $R$, rewrite the first term symmetrically:
+
+$$
+\sum_i \left(\sum_j R_{ij}\right)x_i^2
+= \frac{1}{2}\sum_{i,j} R_{ij}(x_i^2 + x_j^2).
+$$
+
+Substituting gives
+
+$$
+x^{\top} L_R x
+= \frac{1}{2}\sum_{i,j} R_{ij}(x_i^2 + x_j^2 - 2x_i x_j)
+= \frac{1}{2}\sum_{i,j} R_{ij}(x_i - x_j)^2.
+$$
+
+That is why the Laplacian quadratic form is a measure of roughness: it aggregates squared pairwise differences, weighted by relational similarity.
+:::
+
+Because $(x_i - x_j)^2 \ge 0$ and $R_{ij} \ge 0$,
 
 $$
 x^{\top} L_R x \ge 0
 $$
 
-so $L_R$ is positive semidefinite and all eigenvalues satisfy $\lambda \ge 0$. It also shows that the constant vector lies in the nullspace:
+so $L_R$ is positive semidefinite and all eigenvalues satisfy $\lambda \ge 0$. It also shows that a constant vector lies in the nullspace:
 
 $$
 L_R \mathbf{1} = 0
@@ -246,3 +352,214 @@ That gives the standard spectral picture:
 - the zero mode is constant over connected relational support
 - small eigenvalues correspond to smooth relational variation
 - larger eigenvalues capture oscillatory or high-friction variation
+
+## Working Example
+
+To make the construction concrete, us work through the example we started with:
+
+```{figure} ../../assets/images/config-1.png
+:width: 40%
+:name: fig-alpha-beta-config-2
+
+$\alpha$ (Red) and $\beta$ (Blue) represent two different units of analysis (extendable to *n* layers). We are interested in transferring the similarities.  
+```
+
+$$
+\alpha = \{A, B, C, D\}
+$$
+
+$$
+\beta = \{X, Y, Z, W\}.
+$$
+
+Suppose the overlay relationships are:
+
+- $A$ intersects $X, Y$
+- $B$ intersects $X, Y, Z$
+- $C$ intersects $W, Y, Z$
+- $D$ intersects $W, Z$
+
+This is the simplest binary-support version of RelWeights: each district either overlaps a regime or it does not.
+
+### Step 1: Choose the two layers
+
+Here $\alpha$ is the layer on which we want to model dependence, and $\beta$ is the contextual layer whose support structure will be inherited onto $\alpha$. The point of the construction is that districts need not be similar because they share borders alone; they can also be similar because they intersect the same contextual regimes.
+
+### Step 2: Build the incidence matrix
+
+Using the notation of this note, the intersection structure is recorded in the incidence matrix $B$ rather than a conventional within-layer weights matrix. Rows correspond to districts and columns correspond to contextual regimes ordered as $(X, Y, Z, W)$:
+
+$$
+B =
+\begin{bmatrix}
+1 & 1 & 0 & 0 \\
+1 & 1 & 1 & 0 \\
+0 & 1 & 1 & 1 \\
+0 & 0 & 1 & 1
+\end{bmatrix}.
+$$
+
+Entry $B_{ik}=1$ means district $\alpha_i$ intersects regime $\beta_k$. This is the cross-layer object that carries the inherited support pattern.
+
+### Step 3: Form the RelWeights kernel
+
+The first object we build from $B$ is the Gram matrix
+
+$$
+B B^{\top}.
+$$
+
+For this example,
+
+$$
+B B^{\top} =
+\begin{bmatrix}
+2 & 2 & 1 & 0 \\
+2 & 3 & 2 & 1 \\
+1 & 2 & 3 & 2 \\
+0 & 1 & 2 & 2
+\end{bmatrix}.
+$$
+
+Each entry $(B B^{\top})_{ij}$ counts how many contextual regimes districts $i$ and $j$ share. Thus $A$ and $B$ share two regimes, $A$ and $C$ share one, and $A$ and $D$ share none.
+
+Removing the diagonal produces the RelWeights matrix:
+
+$$
+R = B B^{\top} - \operatorname{diag}(B B^{\top})
+$$
+
+so that
+
+$$
+R =
+\begin{bmatrix}
+0 & 2 & 1 & 0 \\
+2 & 0 & 2 & 1 \\
+1 & 2 & 0 & 2 \\
+0 & 1 & 2 & 0
+\end{bmatrix}.
+$$
+
+This is now a same-layer relational weights matrix on $\alpha$: it tells us how strongly the districts are connected after inheriting support from $\beta$.
+
+### Step 4: Lift similarity into a Laplacian
+
+The degree matrix comes from the row sums of $R$:
+
+$$
+D_R =
+\begin{bmatrix}
+3 & 0 & 0 & 0 \\
+0 & 5 & 0 & 0 \\
+0 & 0 & 5 & 0 \\
+0 & 0 & 0 & 3
+\end{bmatrix}.
+$$
+
+The relational Laplacian is therefore
+
+$$
+L_R = D_R - R
+$$
+
+with
+
+$$
+L_R =
+\begin{bmatrix}
+3 & -2 & -1 & 0 \\
+-2 & 5 & -2 & -1 \\
+-1 & -2 & 5 & -2 \\
+0 & -1 & -2 & 3
+\end{bmatrix}.
+$$
+
+This operator is the object that the rest of the lab will use for smoothing, decomposition, and diagnostics.
+
+### Step 5: Read the quadratic form as roughness
+
+For any vector $x \in \mathbb{R}^4$,
+
+$$
+x^{\top} L_R x = \frac{1}{2} \sum_{i,j} R_{ij}(x_i - x_j)^2.
+$$
+
+In this example, the penalty is strongest when districts connected by larger inherited support diverge in value. So deviations between $B$ and $C$ or between $A$ and $B$ matter more than deviations between $A$ and $C$, and there is no direct penalty between $A$ and $D$ because they share no contextual regime.
+
+### Step 6: Calculate the aggregate Laplacian Energy or Roughness
+
+In this four-district example, the quadratic identity becomes
+
+$$
+x^{\top} L_R x
+= 2(x_A - x_B)^2 + (x_A - x_C)^2 + 2(x_B - x_C)^2 + (x_B - x_D)^2 + 2(x_C - x_D)^2.
+$$
+
+This is the expanded form: a single scalar that sums every weighted disagreement implied by $R$.
+
+For a vector, take
+
+$$
+x =
+\begin{bmatrix}
+1 \\ 2 \\ 3 \\ 4
+\end{bmatrix}.
+$$
+
+Using the matrix form,
+
+$$
+L_R x =
+\begin{bmatrix}
+-4 \\ -2 \\ 2 \\ 4
+\end{bmatrix}
+\quad\text{so}\quad
+x^{\top} L_R x = 14.
+$$
+
+Independently, using the pairwise expansion,
+
+$$
+2(1-2)^2 + (1-3)^2 + 2(2-3)^2 + (2-4)^2 + 2(3-4)^2 = 14.
+$$
+
+Both routes produce the same scalar, the total weighted friction carried by the vector over the relational graph.
+
+### Step 7: Use the spectrum
+
+Because the relational graph induced by $R$ is connected, the constant vector lies in the nullspace and there is a single zero eigenvalue. The spectrum of this example is approximately
+
+$$
+\lambda(L_R) \approx \{0,\; 2.764,\; 6.000,\; 7.236\}.
+$$
+
+The zero mode corresponds to a constant vector over all four districts. The positive eigenvalues describe increasingly rough modes of variation over the inherited relational structure.
+
+## Interpretation notes for RelWeights
+
+The objects in this note are easiest to read as graph operators on the analysis layer $\alpha$, where ties are induced by shared contextual supports in $\beta$. That changes the interpretation in an important way: smoothness, clustering, and imbalance are no longer defined by physical contiguity alone, but by common inherited regimes. This is the key move from overlay logic to operator logic [@anselin1988; @bavaud1998models].
+
+### 1. Laplacian Energy or Roughness
+
+It is small when districts that inherit the same supports also carry similar values, and it is large when strongly related districts diverge. In policy terms, this can be read as a mismatch score: how much the observed outcome departs from the contextual structure we believe should organize the space. If the signal is approximately constant over each relationally coherent region, the roughness is low; if sharp differences cut across shared supports, the roughness rises.
+
+### 2. Eigenvalues and eigenvectors
+
+The eigenvectors of $L_R$ are orthogonal modes of variation over the inherited support graph, and the eigenvalues tell us how rough each mode is. The zero eigenvalue corresponds to a constant component on each connected relational component. Small positive eigenvalues describe broad, low-frequency patterns that change gradually across the graph. Large eigenvalues describe high-frequency or localized contrasts, where values flip sharply across strong ties. In our setting, these are not merely geometric modes of adjacency; they are overlay-defined modes of similarity and separation [@chung1997spectral; @griffith2000linear; @tiefelsdorf2007semiparametric].
+
+Equivalently, the symmetric Laplacian admits a spectral decomposition $L_R = U \Lambda U^{\top}$, where the columns of $U$ are orthonormal eigenvectors and $\Lambda$ collects the eigenvalues on the diagonal. That means any signal on $\alpha$ can be expanded in this basis and read as a mixture of smooth and rough relational modes, which is exactly why the Laplacian is useful for filtering, approximation, and decomposition [@chung1997spectral; @merris1994laplacian].
+
+### 3. Graph-theoretic meaning of the discrete Laplacian
+
+Node by node, the operator can be written as
+
+$$
+(L_R x)_i = \sum_j R_{ij}(x_i - x_j).
+$$
+
+This is a local imbalance measure. If $(L_Rx)_i$ is positive, district $i$ sits above the weighted average of the districts to which it is relationally tied. If it is negative, it sits below that relational neighborhood average. If it is near zero, the district is locally consistent with the values around it under the RelWeights graph. This is why the discrete Laplacian behaves like a second-order difference operator on a graph: it measures how far a node departs from the level implied by its weighted neighbors [@chung1997spectral].
+
+### 4. Why this matters for spatial econometrics
+
+In classical spatial econometrics, the spectrum of a weights operator already carries substantive information about spatial dependence, filtering, and admissible map patterns. Eigenvector spatial filtering makes this especially clear by using eigenvectors of a transformed connectivity operator as regressors that absorb structured dependence [@griffith2000linear; @tiefelsdorf2007semiparametric]. What RelWeights adds is a way to build that operator from cross-layer overlays rather than from contiguity or distance alone. Once the operator is in Laplacian form, the same spectral logic can be used for smoothing, basis construction, decomposition, and low-rank approximation on large (geospatial) systems [@mahdi2019efficient].

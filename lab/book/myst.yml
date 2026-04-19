@@ -18,11 +18,16 @@ project:
         url: /content/foundations/lab-roadmap#relweights
       - title: The Laplacian Operator
         url: /content/foundations/lab-roadmap#the-laplacian-operator
+      - title: Linear Form of the Laplacian
+        url: /content/foundations/lab-roadmap#linear-form-of-the-laplacian
       - title: Quadratic Form of the Laplacian
         url: /content/foundations/lab-roadmap#quadratic-form-of-the-laplacian
-      - title: 'Step 6: Use the spectrum'
-        url: /content/foundations/lab-roadmap#step-6-use-the-spectrum
-    - file: content/01-foundations/lab-roadmap-notebook.ipynb
+      - title: Working Example
+        url: /content/foundations/lab-roadmap#working-example
+      - title: Interpretation notes for RelWeights
+        url: /content/foundations/lab-roadmap#interpretation-notes-for-relweights
+    - title: 'Lab 1: Building RelWeights'
+      file: content/01-foundations/lab-roadmap-notebook.ipynb
     - file: content/01-foundations/operator-state.md
       children:
       - title: 1. Incidence matrices
