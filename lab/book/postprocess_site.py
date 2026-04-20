@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import os
+import re
 import shutil
 from pathlib import Path
+
+import yaml
 
 
 BOOK_ROOT = Path(__file__).resolve().parent
 HTML_ROOT = BOOK_ROOT / "_build" / "html"
 CONTENT_ROOT = BOOK_ROOT / "content"
+MYST_CONFIG = BOOK_ROOT / "myst.yml"
 
 
 SCRIPT = r"""
@@ -208,6 +213,78 @@ def strip_numeric_prefix(value: str) -> str:
     return value.split("-", 1)[1] if value[:2].isdigit() and "-" in value else value
 
 
+def derive_page_path(file_path: str, base_url: str) -> str:
+    no_ext = re.sub(r"\.(md|ipynb)$", "", file_path, flags=re.IGNORECASE)
+    parts = [strip_numeric_prefix(part) for part in no_ext.split("/") if part]
+    base = base_url.rstrip("/")
+    return f"{base}/{'/'.join(parts)}" if base else f"/{'/'.join(parts)}"
+
+
+def build_children_map() -> dict[str, list[dict[str, str]]]:
+    config = yaml.safe_load(MYST_CONFIG.read_text(encoding="utf-8"))
+    toc = config.get("project", {}).get("toc", [])
+    base_url = os.environ.get("BASE_URL", "").rstrip("/")
+
+    mapping: dict[str, list[dict[str, str]]] = {}
+
+    def walk(items: list[dict]) -> None:
+        for item in items or []:
+            if not isinstance(item, dict):
+                continue
+            children = item.get("children")
+            file_path = item.get("file")
+            if file_path and isinstance(children, list) and children:
+                page_path = derive_page_path(file_path, base_url)
+                usable_children = [
+                    {"title": child.get("title", ""), "url": child.get("url", "")}
+                    for child in children
+                    if isinstance(child, dict) and child.get("title") and child.get("url")
+                ]
+                if usable_children:
+                    mapping[page_path] = usable_children
+            if isinstance(children, list):
+                walk(children)
+
+    walk(toc)
+    return mapping
+
+
+def create_sidebar_links(children: list[dict[str, str]]) -> str:
+    return "".join(
+        (
+            f'<a href="{child["url"]}" '
+            'class="block break-words focus:outline outline-blue-200 outline-2 '
+            'rounded p-2 my-1 ml-2 text-sm hover:bg-slate-300/30">'
+            f'{child["title"]}</a>'
+        )
+        for child in children
+    )
+
+
+def inject_sidebar_children(html_path: Path, children_map: dict[str, list[dict[str, str]]]) -> bool:
+    text = html_path.read_text(encoding="utf-8")
+    changed = False
+
+    pattern = re.compile(
+        r'(?P<prefix><div data-state="closed" class="w-full"><div class="myst-toc-item.*?<a[^>]+href="(?P<href>[^"]+)"[^>]*>.*?</a>.*?</div><div[^>]*class="[^"]*\bcollapsible-content\b[^"]*"[^>]*>)(?P<content>\s*)(?P<suffix></div></div>)',
+        flags=re.DOTALL,
+    )
+
+    def replacer(match: re.Match[str]) -> str:
+        nonlocal changed
+        href = match.group("href").rstrip("/")
+        children = children_map.get(href)
+        if not children:
+            return match.group(0)
+        changed = True
+        return f'{match.group("prefix")}{create_sidebar_links(children)}{match.group("suffix")}'
+
+    updated = pattern.sub(replacer, text)
+    if changed:
+        html_path.write_text(updated, encoding="utf-8")
+    return changed
+
+
 def mirror_interactive_html() -> int:
     copied = 0
     for interactive_dir in CONTENT_ROOT.glob("*/interactive"):
@@ -239,6 +316,12 @@ def main() -> int:
         raise SystemExit(f"Build output not found: {HTML_ROOT}")
 
     copied = mirror_interactive_html()
+    children_map = build_children_map()
+
+    sidebar_fills = 0
+    for html_path in HTML_ROOT.rglob("*.html"):
+        if inject_sidebar_children(html_path, children_map):
+            sidebar_fills += 1
 
     changed = 0
     for html_path in HTML_ROOT.rglob("*.html"):
@@ -246,6 +329,7 @@ def main() -> int:
             changed += 1
 
     print(f"Copied {copied} interactive HTML files into the built site.")
+    print(f"Filled sidebar submenu HTML in {sidebar_fills} pages.")
     print(f"Injected sidebar enhancer into {changed} HTML files.")
     return 0
 

@@ -1068,6 +1068,9 @@ Each iteration is now displayed as its own figure. The first two panels show the
 
 So the local diagnostics now sit directly underneath the DGP they summarize, rather than being attached only to the contextual draw.
 
+For an interactive version of the same Monte Carlo logic, open the standalone simulator:
+[relweights-monte-carlo-simulator.html](interactive/relweights-monte-carlo-simulator.html)
+
 ```{code-cell} ipython3
 rows = np.repeat(np.arange(N_ROWS), N_COLS)
 cols = np.tile(np.arange(N_COLS), N_ROWS)
