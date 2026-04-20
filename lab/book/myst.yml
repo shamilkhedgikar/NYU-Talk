@@ -44,8 +44,8 @@ project:
       url: /content/lab-3-interpolation-with-relweights/interpolation#notebook-anchor
     - title: Assets to add
       url: /content/lab-3-interpolation-with-relweights/interpolation#assets-to-add
-  - file: content/06-applications-in-spatial-econometrics/applications-in-spatial-econometrics.md
-  - file: content/07-industry-applications/industry-applications.md
+  - title: Industry R&D Applications
+    file: content/06-industry-r-and-d-applications/industry-r-and-d-applications.md
   - title: References
     children:
     - file: content/08-references/references.md
