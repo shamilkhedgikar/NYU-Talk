@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import os
+import shutil
 from pathlib import Path
 
 
 BOOK_ROOT = Path(__file__).resolve().parent
 HTML_ROOT = BOOK_ROOT / "_build" / "html"
+CONTENT_ROOT = BOOK_ROOT / "content"
 
 
 SCRIPT = r"""
@@ -203,15 +204,48 @@ def inject_script(html_path: Path) -> bool:
     return True
 
 
+def strip_numeric_prefix(value: str) -> str:
+    return value.split("-", 1)[1] if value[:2].isdigit() and "-" in value else value
+
+
+def mirror_interactive_html() -> int:
+    copied = 0
+    for interactive_dir in CONTENT_ROOT.glob("*/interactive"):
+        section_dir = interactive_dir.parent
+        route_section = strip_numeric_prefix(section_dir.name)
+        page_files = [
+            path
+            for path in section_dir.iterdir()
+            if path.is_file() and path.suffix.lower() in {".md", ".ipynb"}
+        ]
+        if not page_files:
+            continue
+
+        html_files = list(interactive_dir.glob("*.html"))
+        if not html_files:
+            continue
+
+        for page_file in page_files:
+            destination_dir = HTML_ROOT / "content" / route_section / page_file.stem / "interactive"
+            destination_dir.mkdir(parents=True, exist_ok=True)
+            for html_file in html_files:
+                shutil.copy2(html_file, destination_dir / html_file.name)
+                copied += 1
+    return copied
+
+
 def main() -> int:
     if not HTML_ROOT.exists():
         raise SystemExit(f"Build output not found: {HTML_ROOT}")
+
+    copied = mirror_interactive_html()
 
     changed = 0
     for html_path in HTML_ROOT.rglob("*.html"):
         if inject_script(html_path):
             changed += 1
 
+    print(f"Copied {copied} interactive HTML files into the built site.")
     print(f"Injected sidebar enhancer into {changed} HTML files.")
     return 0
 
