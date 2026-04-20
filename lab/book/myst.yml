@@ -169,6 +169,7 @@ site:
     url: https://colab.research.google.com/
   actions: []
   options:
+    favicon: assets/images/favicon-relweights.png
     folders: true
     hide_outline: true
     logo_text: From Overlays to Operators

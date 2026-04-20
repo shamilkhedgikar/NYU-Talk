@@ -1,0 +1,220 @@
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+
+BOOK_ROOT = Path(__file__).resolve().parent
+HTML_ROOT = BOOK_ROOT / "_build" / "html"
+
+
+SCRIPT = r"""
+<script id="relweights-sidebar-enhancer">
+(() => {
+  const normalizePath = (value) => {
+    if (!value) return "/";
+    const trimmed = value.replace(/\/+$/, "");
+    return trimmed || "/";
+  };
+
+  const stripNumericPrefix = (value) => value.replace(/^\d+-/, "");
+
+  const derivePagePath = (filePath, baseUrl) => {
+    const noExt = filePath.replace(/\.(md|ipynb)$/i, "");
+    const parts = noExt.split("/").filter(Boolean).map(stripNumericPrefix);
+    return `${baseUrl}/${parts.join("/")}`;
+  };
+
+  const extractBaseUrl = (project) => {
+    const candidates = [window.location.pathname];
+    if (project?.pages) {
+      for (const page of project.pages) {
+        if (page?.url) candidates.push(page.url);
+        if (page?.thumbnail) candidates.push(page.thumbnail);
+      }
+    }
+
+    for (const candidate of candidates) {
+      if (!candidate) continue;
+      let pathname = "/";
+      try {
+        pathname = new URL(candidate, window.location.origin).pathname;
+      } catch (_error) {
+        continue;
+      }
+      if (pathname.includes("/content/")) {
+        return normalizePath(pathname.split("/content/")[0]);
+      }
+      if (pathname.includes("/build/")) {
+        return normalizePath(pathname.split("/build/")[0]);
+      }
+    }
+    return "/";
+  };
+
+  const getProject = () => {
+    try {
+      return window.__remixContext?.state?.loaderData?.root?.project ?? null;
+    } catch (_error) {
+      return null;
+    }
+  };
+
+  const createLink = (title, url) => {
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.textContent = title;
+    anchor.className = [
+      "block",
+      "break-words",
+      "focus:outline",
+      "outline-blue-200",
+      "outline-2",
+      "rounded",
+      "p-2",
+      "my-1",
+      "ml-2",
+      "text-sm",
+      "hover:bg-slate-300/30",
+    ].join(" ");
+    return anchor;
+  };
+
+  const populateSidebar = () => {
+    const project = getProject();
+    if (!project || !Array.isArray(project.toc)) return false;
+
+    const currentOrigin = window.location.origin;
+    const baseUrl = extractBaseUrl(project);
+
+    const itemsByPath = new Map();
+    const walk = (items) => {
+      for (const item of items || []) {
+        if (item && typeof item === "object" && item.file && Array.isArray(item.children) && item.children.length) {
+          const path = normalizePath(derivePagePath(item.file, baseUrl));
+          itemsByPath.set(path, item.children);
+        }
+        if (item && typeof item === "object" && Array.isArray(item.children)) {
+          walk(item.children);
+        }
+      }
+    };
+    walk(project.toc);
+
+    let populated = 0;
+    document.querySelectorAll(".myst-primary-sidebar-toc .w-full").forEach((wrapper) => {
+      const row = wrapper.querySelector(":scope > .myst-toc-item");
+      const content = wrapper.querySelector(":scope > .collapsible-content");
+      const link = row?.querySelector("a[href]");
+      if (!row || !content || !link) return;
+      if (content.dataset.relweightsPopulated === "true") return;
+
+      const path = normalizePath(new URL(link.href, currentOrigin).pathname);
+      const children = itemsByPath.get(path);
+      if (!children || !children.length) return;
+
+      content.replaceChildren();
+      const fragment = document.createDocumentFragment();
+      for (const child of children) {
+        if (!child?.title || !child?.url) continue;
+        fragment.appendChild(createLink(child.title, child.url));
+      }
+      if (fragment.childNodes.length > 0) {
+        content.appendChild(fragment);
+        content.dataset.relweightsPopulated = "true";
+        populated += 1;
+      }
+    });
+
+    return populated > 0;
+  };
+
+  const bindSamePageHashLinks = () => {
+    document.addEventListener(
+      "click",
+      (event) => {
+        const link = event.target.closest("a[href*='#']");
+        if (!link) return;
+
+        const href = link.getAttribute("href");
+        if (!href || href.startsWith("http")) return;
+
+        const url = new URL(href, window.location.origin);
+        if (!url.hash) return;
+
+        const currentPath = normalizePath(window.location.pathname);
+        const targetPath = normalizePath(url.pathname);
+        if (currentPath !== targetPath) return;
+
+        const targetId = decodeURIComponent(url.hash.slice(1));
+        const targetEl = document.getElementById(targetId);
+        if (!targetEl) return;
+
+        event.preventDefault();
+        history.replaceState(null, "", `${url.pathname}${url.hash}`);
+        targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
+      },
+      true,
+    );
+  };
+
+  const start = () => {
+    bindSamePageHashLinks();
+    let pending = false;
+    const schedulePopulate = () => {
+      if (pending) return;
+      pending = true;
+      window.requestAnimationFrame(() => {
+        pending = false;
+        populateSidebar();
+      });
+    };
+
+    schedulePopulate();
+    window.setTimeout(schedulePopulate, 250);
+    window.setTimeout(schedulePopulate, 1000);
+    window.addEventListener("popstate", schedulePopulate);
+    window.addEventListener("hashchange", schedulePopulate);
+
+    const observer = new MutationObserver(() => {
+      schedulePopulate();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start, { once: true });
+  } else {
+    start();
+  }
+})();
+</script>
+"""
+
+
+def inject_script(html_path: Path) -> bool:
+    text = html_path.read_text(encoding="utf-8")
+    if 'id="relweights-sidebar-enhancer"' in text:
+        return False
+    if "</body>" not in text:
+        return False
+    text = text.replace("</body>", f"{SCRIPT}\n</body>")
+    html_path.write_text(text, encoding="utf-8")
+    return True
+
+
+def main() -> int:
+    if not HTML_ROOT.exists():
+        raise SystemExit(f"Build output not found: {HTML_ROOT}")
+
+    changed = 0
+    for html_path in HTML_ROOT.rglob("*.html"):
+        if inject_script(html_path):
+            changed += 1
+
+    print(f"Injected sidebar enhancer into {changed} HTML files.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -48,6 +48,10 @@ jobs:
         working-directory: lab/book
         run: python -m jupyter_book build --html
 
+      - name: Postprocess built site
+        working-directory: lab/book
+        run: python postprocess_site.py
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
