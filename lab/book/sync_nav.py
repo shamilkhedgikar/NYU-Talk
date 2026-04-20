@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -65,17 +66,36 @@ def page_url(rel_path: Path) -> str:
     return f"{base}/" + "/".join(parts)
 
 
-def extract_section_links(markdown_path: Path) -> list[dict[str, str]] | None:
-    text = markdown_path.read_text(encoding="utf-8")
+def iter_markdown_lines(path: Path) -> list[str]:
+    if path.suffix == ".ipynb":
+        notebook = json.loads(path.read_text(encoding="utf-8"))
+        lines: list[str] = []
+        for cell in notebook.get("cells", []):
+            if cell.get("cell_type") != "markdown":
+                continue
+            source = cell.get("source", [])
+            if isinstance(source, str):
+                lines.extend(source.splitlines())
+            else:
+                for chunk in source:
+                    lines.extend(str(chunk).splitlines())
+            lines.append("")
+        return lines
+
+    text = path.read_text(encoding="utf-8")
+    return strip_front_matter(text).splitlines()
+
+
+def extract_section_links(source_path: Path) -> list[dict[str, str]] | None:
+    text = source_path.read_text(encoding="utf-8")
     if NAV_IGNORE_TOKEN in text:
         return None
 
-    text = strip_front_matter(text)
-    page_href = page_url(markdown_path.relative_to(BOOK_ROOT))
+    page_href = page_url(source_path.relative_to(BOOK_ROOT))
     children: list[dict[str, str]] = []
     in_fence = False
 
-    for raw_line in text.splitlines():
+    for raw_line in iter_markdown_lines(source_path):
         line = raw_line.rstrip()
         if FENCE_RE.match(line.strip()):
             in_fence = not in_fence
@@ -119,7 +139,7 @@ def sync_items(items: list[Any], changes: list[str]) -> bool:
         if (
             isinstance(file_value, str)
             and file_value.startswith("content/")
-            and file_value.endswith(".md")
+            and file_value.endswith((".md", ".ipynb"))
             and (
                 "children" not in item
                 or (isinstance(item["children"], list) and is_auto_section_list(item["children"]))
