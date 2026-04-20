@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -19,6 +20,16 @@ CUSTOM_ID_RE = re.compile(r"\s*\{#([A-Za-z0-9][A-Za-z0-9\-_:]*)\}\s*$")
 FENCE_RE = re.compile(r"^(```+|~~~+)")
 NUMERIC_PREFIX_RE = re.compile(r"^\d+-")
 NAV_IGNORE_TOKEN = "<!-- nav:ignore -->"
+BASE_URL = os.environ.get("BASE_URL", "").strip()
+
+
+def normalize_base_url(value: str) -> str:
+    if not value:
+        return ""
+    value = value.strip()
+    if value == "/":
+        return ""
+    return "/" + value.strip("/")
 
 
 def strip_front_matter(text: str) -> str:
@@ -50,7 +61,8 @@ def clean_heading_title(value: str) -> str:
 
 def page_url(rel_path: Path) -> str:
     parts = [NUMERIC_PREFIX_RE.sub("", part) for part in rel_path.with_suffix("").parts]
-    return "/" + "/".join(parts)
+    base = normalize_base_url(BASE_URL)
+    return f"{base}/" + "/".join(parts)
 
 
 def extract_section_links(markdown_path: Path) -> list[dict[str, str]] | None:
