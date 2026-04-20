@@ -1,0 +1,1780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RelWeights Monte Carlo Simulator</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --panel: #ffffff;
+      --border: #d9e0e6;
+      --text: #1f2933;
+      --muted: #5f6c7b;
+      --blue: #3f72af;
+      --orange: #d97706;
+      --accent: #0f766e;
+      --danger: #b91c1c;
+      --shadow: 0 10px 26px rgba(17, 24, 39, 0.08);
+      --radius: 14px;
+      --radius-sm: 10px;
+      --font: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: var(--font);
+      background: linear-gradient(180deg, #f8fafc 0%, #eef3f7 100%);
+      color: var(--text);
+    }
+
+    header {
+      padding: 20px 28px 14px;
+      border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(8px);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 1.45rem;
+      font-weight: 650;
+      letter-spacing: 0.01em;
+    }
+
+    header p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      max-width: 1100px;
+      line-height: 1.45;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 340px minmax(0, 1fr);
+      gap: 18px;
+      padding: 18px;
+      align-items: start;
+    }
+
+    .controls,
+    .content-panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .controls {
+      padding: 18px;
+      position: sticky;
+      top: 108px;
+      max-height: calc(100vh - 126px);
+      overflow: auto;
+    }
+
+    .section-title {
+      margin: 0 0 10px;
+      font-size: 0.94rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #334155;
+    }
+
+    .control-group {
+      margin-bottom: 16px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    }
+
+    .control-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 12px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #334155;
+      margin-bottom: 4px;
+    }
+
+    input,
+    select,
+    button {
+      font: inherit;
+    }
+
+    input,
+    select {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 9px;
+      border: 1px solid #cbd5e1;
+      background: #fff;
+      color: var(--text);
+    }
+
+    input[type="checkbox"] {
+      width: auto;
+      margin-right: 8px;
+      transform: translateY(1px);
+    }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      font-size: 0.84rem;
+      color: #334155;
+      margin-top: 8px;
+    }
+
+    .btn-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    button {
+      padding: 10px 12px;
+      border: 0;
+      border-radius: 10px;
+      background: #0f172a;
+      color: #fff;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    button.secondary {
+      background: #475569;
+    }
+
+    button.ghost {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+
+    button.warn {
+      background: var(--danger);
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+
+    .hint {
+      font-size: 0.78rem;
+      line-height: 1.45;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    .content {
+      display: grid;
+      gap: 18px;
+    }
+
+    .content-panel {
+      padding: 18px;
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .status-card {
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: #f8fafc;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+    }
+
+    .status-card .label {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .status-card .value {
+      font-size: 1.18rem;
+      font-weight: 700;
+    }
+
+    .subtle {
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.45;
+    }
+
+    .plot-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .plot-card {
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fff;
+    }
+
+    .plot-card h3 {
+      margin: 0 0 10px;
+      font-size: 0.95rem;
+      font-weight: 700;
+    }
+
+    .chart {
+      min-height: 320px;
+    }
+
+    .iteration-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 14px;
+      margin-bottom: 12px;
+    }
+
+    .iteration-header h2 {
+      margin: 0;
+      font-size: 1.05rem;
+    }
+
+    .iteration-strip {
+      display: flex;
+      gap: 14px;
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+
+    .support-column,
+    .scenario-column {
+      flex: 0 0 auto;
+      background: #fff;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      border-radius: 12px;
+      padding: 10px;
+    }
+
+    .support-column {
+      width: 220px;
+    }
+
+    .scenario-column {
+      width: 210px;
+    }
+
+    .support-column h3,
+    .scenario-column h3 {
+      margin: 0 0 8px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .canvas-wrap + .canvas-wrap {
+      margin-top: 10px;
+    }
+
+    .canvas-label {
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: #475569;
+      margin: 0 0 5px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      background: #fff;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 720px;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+      text-align: right;
+      font-size: 0.84rem;
+    }
+
+    th:first-child,
+    td:first-child {
+      text-align: left;
+    }
+
+    th {
+      background: #f8fafc;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #475569;
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(15, 118, 110, 0.1);
+      color: var(--accent);
+      font-size: 0.74rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .empty {
+      padding: 22px;
+      border-radius: 12px;
+      border: 1px dashed rgba(148, 163, 184, 0.45);
+      color: var(--muted);
+      background: #fbfdff;
+      text-align: center;
+    }
+
+    @media (max-width: 1280px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+
+      .controls {
+        position: static;
+        max-height: none;
+      }
+
+      .plot-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>RelWeights Monte Carlo Simulator</h1>
+    <p>
+      Standalone browser app for comparing geographic Geary under first-order queen or rook contiguity with contextual
+      Geary under stacked-support RelWeights. The app reimplements the notebook logic in JavaScript so the support
+      generator, DGPs, and Geary diagnostics can be tuned without rerunning Python.
+    </p>
+  </header>
+
+  <div class="app">
+    <aside class="controls">
+      <div class="control-group">
+        <div class="section-title">Simulation scope</div>
+        <div class="control-grid">
+          <div>
+            <label for="seed">Seed</label>
+            <input id="seed" type="number" value="20260419" step="1">
+          </div>
+          <div>
+            <label for="targetRuns">Target runs</label>
+            <input id="targetRuns" type="number" value="150" min="1" max="300" step="1">
+          </div>
+          <div>
+            <label for="nRows">Rows</label>
+            <input id="nRows" type="number" value="10" min="4" max="20" step="1">
+          </div>
+          <div>
+            <label for="nCols">Cols</label>
+            <input id="nCols" type="number" value="10" min="4" max="20" step="1">
+          </div>
+        </div>
+        <div class="control-grid" style="margin-top:10px;">
+          <div>
+            <label for="contiguity">Geographic contiguity</label>
+            <select id="contiguity">
+              <option value="queen" selected>Queen</option>
+              <option value="rook">Rook</option>
+            </select>
+          </div>
+          <div>
+            <label for="randomizationMode">Randomization mode</label>
+            <select id="randomizationMode">
+              <option value="randomize_both" selected>Randomize both</option>
+              <option value="hold_layers">Hold layers, randomize data</option>
+              <option value="hold_data">Hold data, randomize layers</option>
+            </select>
+          </div>
+        </div>
+        <div class="checkbox-row">
+          <input id="includeCrossSupport" type="checkbox" checked>
+          <label for="includeCrossSupport" style="margin:0;">Include cross-support DGP</label>
+        </div>
+        <div class="hint">
+          Total runs are capped at 300 so the browser remains responsive. If you change any knob, the app will
+          automatically reinitialize before the next run so histories do not mix incompatible parameter settings.
+        </div>
+      </div>
+
+      <div class="control-group">
+        <div class="section-title">Support generator</div>
+        <div class="control-grid">
+          <div>
+            <label for="fineMin">Layer 1 min</label>
+            <input id="fineMin" type="number" value="18" min="2" max="80" step="1">
+          </div>
+          <div>
+            <label for="fineMax">Layer 1 max</label>
+            <input id="fineMax" type="number" value="22" min="2" max="80" step="1">
+          </div>
+          <div>
+            <label for="coarseMin">Layer 2 min</label>
+            <input id="coarseMin" type="number" value="7" min="2" max="80" step="1">
+          </div>
+          <div>
+            <label for="coarseMax">Layer 2 max</label>
+            <input id="coarseMax" type="number" value="10" min="2" max="80" step="1">
+          </div>
+          <div>
+            <label for="fineConcentration">Layer 1 concentration</label>
+            <input id="fineConcentration" type="number" value="1.7" min="0.2" max="10" step="0.1">
+          </div>
+          <div>
+            <label for="coarseConcentration">Layer 2 concentration</label>
+            <input id="coarseConcentration" type="number" value="1.2" min="0.2" max="10" step="0.1">
+          </div>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <div class="section-title">Geographic process</div>
+        <div class="control-grid">
+          <div>
+            <label for="geographicSteps">Steps</label>
+            <input id="geographicSteps" type="number" value="25" min="1" max="120" step="1">
+          </div>
+          <div>
+            <label for="geographicBlend">Blend</label>
+            <input id="geographicBlend" type="number" value="0.30" min="0.01" max="0.99" step="0.01">
+          </div>
+          <div>
+            <label for="geographicInnovation">Innovation</label>
+            <input id="geographicInnovation" type="number" value="0.20" min="0.01" max="2" step="0.01">
+          </div>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <div class="section-title">Contextual and mixed processes</div>
+        <div class="control-grid">
+          <div>
+            <label for="contextualNoise">Contextual noise</label>
+            <input id="contextualNoise" type="number" value="0.35" min="0.00" max="3" step="0.01">
+          </div>
+          <div>
+            <label for="mixedNoise">Mixed noise</label>
+            <input id="mixedNoise" type="number" value="0.20" min="0.00" max="3" step="0.01">
+          </div>
+          <div>
+            <label for="mixedGeoWeight">Mixed geographic weight</label>
+            <input id="mixedGeoWeight" type="number" value="0.70" min="0.00" max="3" step="0.01">
+          </div>
+          <div>
+            <label for="mixedCtxWeight">Mixed contextual weight</label>
+            <input id="mixedCtxWeight" type="number" value="0.70" min="0.00" max="3" step="0.01">
+          </div>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <div class="section-title">Chart focus</div>
+        <div class="control-grid">
+          <div>
+            <label for="scenarioFocus">Distribution scenario</label>
+            <select id="scenarioFocus"></select>
+          </div>
+        </div>
+        <div class="hint">
+          The current-iteration panel always shows every DGP. The charts below it focus on the selected scenario so
+          the Geary W versus Geary R comparison can be read cleanly as runs accumulate.
+        </div>
+      </div>
+
+      <div class="control-group">
+        <div class="section-title">Run controls</div>
+        <div class="btn-row">
+          <button id="initializeBtn" type="button">Initialize</button>
+          <button id="run1Btn" class="secondary" type="button">Run 1</button>
+          <button id="run10Btn" class="secondary" type="button">Run 10</button>
+          <button id="runTargetBtn" type="button">Run to target</button>
+          <button id="stopBtn" class="warn" type="button">Stop</button>
+          <button id="clearBtn" class="ghost" type="button">Clear results</button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="content">
+      <section class="content-panel">
+        <div class="status-grid">
+          <div class="status-card">
+            <div class="label">Completed runs</div>
+            <div class="value" id="runsCompleted">0</div>
+          </div>
+          <div class="status-card">
+            <div class="label">Current Layer 1 count</div>
+            <div class="value" id="currentLayer1">–</div>
+          </div>
+          <div class="status-card">
+            <div class="label">Current Layer 2 count</div>
+            <div class="value" id="currentLayer2">–</div>
+          </div>
+          <div class="status-card">
+            <div class="label">Mode</div>
+            <div class="value" id="currentMode">–</div>
+          </div>
+        </div>
+        <div class="subtle" id="statusText">
+          Initialize the simulator to lock in the current parameters. After that, each run will generate one Monte Carlo
+          iteration and update the current support-view panel plus the selected Geary comparison charts.
+        </div>
+      </section>
+
+      <section class="content-panel">
+        <div class="iteration-header">
+          <h2>Current iteration view</h2>
+          <span class="pill" id="iterationTag">No runs yet</span>
+        </div>
+        <div class="subtle" style="margin-bottom:12px;">
+          Each scenario block shows the realized signal on top and the local Geary diagnostics for geographic support
+          <strong>W</strong> and contextual support <strong>R</strong> below it. The first two panels show the finer and
+          coarser support layers used to construct the contextual graph on that run.
+        </div>
+        <div id="iterationGrid" class="iteration-strip">
+          <div class="empty">Run the simulator to populate the current-iteration panel.</div>
+        </div>
+      </section>
+
+      <section class="content-panel">
+        <div class="plot-grid">
+          <div class="plot-card">
+            <h3>Geary distribution by support</h3>
+            <div id="distributionChart" class="chart"></div>
+          </div>
+          <div class="plot-card">
+            <h3>Cumulative mean Geary across runs</h3>
+            <div id="cumulativeChart" class="chart"></div>
+          </div>
+          <div class="plot-card">
+            <h3>Geary W vs Geary R scatter</h3>
+            <div id="scatterChart" class="chart"></div>
+          </div>
+          <div class="plot-card">
+            <h3>Scenario summary</h3>
+            <div id="summaryTable"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const MAX_TOTAL_RUNS = 300;
+    const TAB20 = [
+      "#1f77b4", "#aec7e8", "#ff7f0e", "#ffbb78", "#2ca02c", "#98df8a",
+      "#d62728", "#ff9896", "#9467bd", "#c5b0d5", "#8c564b", "#c49c94",
+      "#e377c2", "#f7b6d2", "#7f7f7f", "#c7c7c7", "#bcbd22", "#dbdb8d",
+      "#17becf", "#9edae5"
+    ];
+    const DIVERGING_STOPS = [
+      [0.0, [59, 76, 192]],
+      [0.18, [110, 153, 233]],
+      [0.5, [247, 247, 247]],
+      [0.82, [244, 109, 67]],
+      [1.0, [180, 4, 38]]
+    ];
+    const VIRIDIS_STOPS = [
+      [0.0, [68, 1, 84]],
+      [0.25, [59, 82, 139]],
+      [0.5, [33, 145, 140]],
+      [0.75, [94, 201, 98]],
+      [1.0, [253, 231, 37]]
+    ];
+    const SCENARIO_LABELS = {
+      iid_noise: "iid noise",
+      geographic_only: "geographic only",
+      contextual_only: "contextual only",
+      mixed: "mixed",
+      cross_support_optional: "cross support"
+    };
+
+    const state = {
+      initialized: false,
+      running: false,
+      stopRequested: false,
+      config: null,
+      configSignature: null,
+      graphs: null,
+      history: [],
+      lastView: null
+    };
+
+    function clamp(value, lo, hi) {
+      return Math.max(lo, Math.min(hi, value));
+    }
+
+    function mean(values) {
+      if (!values.length) return NaN;
+      return values.reduce((acc, v) => acc + v, 0) / values.length;
+    }
+
+    function sd(values) {
+      if (values.length < 2) return 0;
+      const mu = mean(values);
+      const variance = values.reduce((acc, v) => acc + (v - mu) ** 2, 0) / (values.length - 1);
+      return Math.sqrt(variance);
+    }
+
+    function linspace(start, end, n) {
+      if (n <= 1) return [start];
+      const out = [];
+      const step = (end - start) / (n - 1);
+      for (let i = 0; i < n; i += 1) out.push(start + step * i);
+      return out;
+    }
+
+    function xmur3(str) {
+      let h = 1779033703 ^ str.length;
+      for (let i = 0; i < str.length; i += 1) {
+        h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+        h = (h << 13) | (h >>> 19);
+      }
+      return function () {
+        h = Math.imul(h ^ (h >>> 16), 2246822507);
+        h = Math.imul(h ^ (h >>> 13), 3266489909);
+        h ^= h >>> 16;
+        return h >>> 0;
+      };
+    }
+
+    function mulberry32(a) {
+      return function () {
+        let t = (a += 0x6d2b79f5);
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    class RNG {
+      constructor(seedText) {
+        const seedFn = xmur3(String(seedText));
+        this.rand = mulberry32(seedFn());
+        this._normal = null;
+      }
+
+      random() {
+        return this.rand();
+      }
+
+      integers(low, highExclusive) {
+        return Math.floor(this.random() * (highExclusive - low)) + low;
+      }
+
+      choice(array, probs = null) {
+        if (!array.length) throw new Error("Cannot choose from an empty array.");
+        if (!probs) return array[this.integers(0, array.length)];
+        const u = this.random();
+        let cum = 0;
+        for (let i = 0; i < array.length; i += 1) {
+          cum += probs[i];
+          if (u <= cum || i === array.length - 1) return array[i];
+        }
+        return array[array.length - 1];
+      }
+
+      sampleWithoutReplacement(n, k) {
+        const arr = Array.from({ length: n }, (_, i) => i);
+        for (let i = arr.length - 1; i > 0; i -= 1) {
+          const j = this.integers(0, i + 1);
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr.slice(0, k);
+      }
+
+      normal(meanValue = 0, sdValue = 1) {
+        if (this._normal !== null) {
+          const z = this._normal;
+          this._normal = null;
+          return meanValue + sdValue * z;
+        }
+        let u = 0;
+        let v = 0;
+        while (u <= Number.EPSILON) u = this.random();
+        while (v <= Number.EPSILON) v = this.random();
+        const mag = Math.sqrt(-2.0 * Math.log(u));
+        const z0 = mag * Math.cos(2.0 * Math.PI * v);
+        const z1 = mag * Math.sin(2.0 * Math.PI * v);
+        this._normal = z1;
+        return meanValue + sdValue * z0;
+      }
+
+      gamma(shape) {
+        if (shape <= 0) throw new Error("Gamma shape must be positive.");
+        if (shape < 1) {
+          const u = this.random();
+          return this.gamma(shape + 1) * Math.pow(u, 1 / shape);
+        }
+        const d = shape - 1 / 3;
+        const c = 1 / Math.sqrt(9 * d);
+        for (;;) {
+          let x = this.normal();
+          let v = 1 + c * x;
+          if (v <= 0) continue;
+          v = v * v * v;
+          const u = this.random();
+          if (u < 1 - 0.0331 * x * x * x * x) return d * v;
+          if (Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) return d * v;
+        }
+      }
+
+      dirichlet(n, alpha) {
+        const draws = [];
+        let total = 0;
+        for (let i = 0; i < n; i += 1) {
+          const g = this.gamma(alpha);
+          draws.push(g);
+          total += g;
+        }
+        return draws.map((v) => v / total);
+      }
+    }
+
+    function getScenarioList(config) {
+      const base = ["iid_noise", "geographic_only", "contextual_only", "mixed"];
+      if (config.includeCrossSupport) base.push("cross_support_optional");
+      return base;
+    }
+
+    function readConfig() {
+      const nRows = clamp(parseInt(document.getElementById("nRows").value, 10) || 10, 4, 20);
+      const nCols = clamp(parseInt(document.getElementById("nCols").value, 10) || 10, 4, 20);
+      const fineMin = clamp(parseInt(document.getElementById("fineMin").value, 10) || 18, 2, nRows * nCols);
+      const fineMax = clamp(parseInt(document.getElementById("fineMax").value, 10) || 22, fineMin, nRows * nCols);
+      const coarseMin = clamp(parseInt(document.getElementById("coarseMin").value, 10) || 7, 2, nRows * nCols);
+      const coarseMax = clamp(parseInt(document.getElementById("coarseMax").value, 10) || 10, coarseMin, nRows * nCols);
+      const config = {
+        seed: parseInt(document.getElementById("seed").value, 10) || 20260419,
+        targetRuns: clamp(parseInt(document.getElementById("targetRuns").value, 10) || 150, 1, MAX_TOTAL_RUNS),
+        nRows,
+        nCols,
+        contiguity: document.getElementById("contiguity").value,
+        randomizationMode: document.getElementById("randomizationMode").value,
+        includeCrossSupport: document.getElementById("includeCrossSupport").checked,
+        fineMin,
+        fineMax,
+        coarseMin,
+        coarseMax,
+        fineConcentration: clamp(parseFloat(document.getElementById("fineConcentration").value) || 1.7, 0.2, 10),
+        coarseConcentration: clamp(parseFloat(document.getElementById("coarseConcentration").value) || 1.2, 0.2, 10),
+        geographicSteps: clamp(parseInt(document.getElementById("geographicSteps").value, 10) || 25, 1, 120),
+        geographicBlend: clamp(parseFloat(document.getElementById("geographicBlend").value) || 0.30, 0.01, 0.99),
+        geographicInnovation: clamp(parseFloat(document.getElementById("geographicInnovation").value) || 0.20, 0.01, 2),
+        contextualNoise: clamp(parseFloat(document.getElementById("contextualNoise").value) || 0.35, 0.0, 3),
+        mixedNoise: clamp(parseFloat(document.getElementById("mixedNoise").value) || 0.20, 0.0, 3),
+        mixedGeoWeight: clamp(parseFloat(document.getElementById("mixedGeoWeight").value) || 0.70, 0.0, 3),
+        mixedCtxWeight: clamp(parseFloat(document.getElementById("mixedCtxWeight").value) || 0.70, 0.0, 3)
+      };
+      if (config.fineMin > config.fineMax || config.coarseMin > config.coarseMax) {
+        throw new Error("Support ranges are invalid.");
+      }
+      if (config.coarseMax > config.nRows * config.nCols || config.fineMax > config.nRows * config.nCols) {
+        throw new Error("Support range cannot exceed the number of cells.");
+      }
+      return config;
+    }
+
+    function configSignature(config) {
+      return JSON.stringify(config);
+    }
+
+    function cellIndex(row, col, nCols) {
+      return row * nCols + col;
+    }
+
+    function buildRookNeighbors(nRows, nCols) {
+      const neighbors = Array.from({ length: nRows * nCols }, () => []);
+      for (let r = 0; r < nRows; r += 1) {
+        for (let c = 0; c < nCols; c += 1) {
+          const i = cellIndex(r, c, nCols);
+          const offsets = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+          for (const [dr, dc] of offsets) {
+            const rr = r + dr;
+            const cc = c + dc;
+            if (rr >= 0 && rr < nRows && cc >= 0 && cc < nCols) {
+              neighbors[i].push(cellIndex(rr, cc, nCols));
+            }
+          }
+        }
+      }
+      return neighbors;
+    }
+
+    function buildGeographicNeighbors(nRows, nCols, style) {
+      const neighbors = Array.from({ length: nRows * nCols }, () => []);
+      const offsets = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+      if (style === "queen") {
+        offsets.push([-1, -1], [-1, 1], [1, -1], [1, 1]);
+      }
+      for (let r = 0; r < nRows; r += 1) {
+        for (let c = 0; c < nCols; c += 1) {
+          const i = cellIndex(r, c, nCols);
+          for (const [dr, dc] of offsets) {
+            const rr = r + dr;
+            const cc = c + dc;
+            if (rr >= 0 && rr < nRows && cc >= 0 && cc < nCols) {
+              neighbors[i].push(cellIndex(rr, cc, nCols));
+            }
+          }
+        }
+      }
+      return neighbors;
+    }
+
+    function geographicWeightsMatrix(neighbors) {
+      const n = neighbors.length;
+      const W = Array.from({ length: n }, () => Array(n).fill(0));
+      for (let i = 0; i < n; i += 1) {
+        for (const j of neighbors[i]) W[i][j] = 1;
+      }
+      return W;
+    }
+
+    function rowStandardize(W) {
+      return W.map((row) => {
+        const rowSum = row.reduce((acc, v) => acc + v, 0);
+        if (rowSum === 0) return row.slice();
+        return row.map((v) => v / rowSum);
+      });
+    }
+
+    function buildStaticGraphs(config) {
+      const neighbors = buildGeographicNeighbors(config.nRows, config.nCols, config.contiguity);
+      const W = geographicWeightsMatrix(neighbors);
+      const WRow = rowStandardize(W);
+      return { neighbors, W, WRow, nCells: config.nRows * config.nCols };
+    }
+
+    function drawRegionCount(minValue, maxValue, rng) {
+      return rng.integers(minValue, maxValue + 1);
+    }
+
+    function regionTargets(nCells, nRegions, rng, concentration) {
+      const raw = rng.dirichlet(nRegions, concentration);
+      const sizes = raw.map((v) => Math.floor(v * (nCells - nRegions)) + 1);
+      let diff = nCells - sizes.reduce((acc, v) => acc + v, 0);
+      while (diff !== 0) {
+        if (diff > 0) {
+          const j = rng.integers(0, nRegions);
+          sizes[j] += 1;
+          diff -= 1;
+        } else {
+          const candidates = [];
+          for (let j = 0; j < nRegions; j += 1) if (sizes[j] > 1) candidates.push(j);
+          const j = candidates[rng.integers(0, candidates.length)];
+          sizes[j] -= 1;
+          diff += 1;
+        }
+      }
+      return sizes;
+    }
+
+    function growConnectedPartition(nRows, nCols, nRegions, rng, concentration) {
+      const nCells = nRows * nCols;
+      const rookNeighbors = buildRookNeighbors(nRows, nCols);
+      const seeds = rng.sampleWithoutReplacement(nCells, nRegions);
+      const labels = Array(nCells).fill(-1);
+      const targets = regionTargets(nCells, nRegions, rng, concentration);
+      const remaining = targets.slice();
+      const frontiers = Array.from({ length: nRegions }, () => new Set());
+
+      for (let region = 0; region < nRegions; region += 1) {
+        const seed = seeds[region];
+        labels[seed] = region;
+        remaining[region] -= 1;
+        for (const nb of rookNeighbors[seed]) frontiers[region].add(nb);
+      }
+
+      while (labels.includes(-1)) {
+        const available = [];
+        const weights = [];
+
+        for (let region = 0; region < nRegions; region += 1) {
+          for (const cell of Array.from(frontiers[region])) {
+            if (labels[cell] !== -1) frontiers[region].delete(cell);
+          }
+          if (frontiers[region].size > 0) {
+            available.push(region);
+            weights.push(Math.max(remaining[region], 1));
+          }
+        }
+
+        if (!available.length) {
+          throw new Error("Partition growth stalled.");
+        }
+
+        const total = weights.reduce((acc, v) => acc + v, 0);
+        const probs = weights.map((v) => v / total);
+        const region = rng.choice(available, probs);
+        const frontierCells = Array.from(frontiers[region]);
+        const cell = frontierCells[rng.integers(0, frontierCells.length)];
+
+        labels[cell] = region;
+        remaining[region] -= 1;
+        frontiers[region].delete(cell);
+        for (const nb of rookNeighbors[cell]) {
+          if (labels[nb] === -1) frontiers[region].add(nb);
+        }
+      }
+      return labels;
+    }
+
+    function buildRelWeights(labels1, labels2) {
+      const n = labels1.length;
+      const R = Array.from({ length: n }, () => Array(n).fill(0));
+      for (let i = 0; i < n; i += 1) {
+        for (let j = i + 1; j < n; j += 1) {
+          let weight = 0;
+          if (labels1[i] === labels1[j]) weight += 1;
+          if (labels2[i] === labels2[j]) weight += 1;
+          R[i][j] = weight;
+          R[j][i] = weight;
+        }
+      }
+      return R;
+    }
+
+    function centerSignal(x) {
+      const mu = mean(x);
+      return x.map((v) => v - mu);
+    }
+
+    function standardizeSignal(x) {
+      const mu = mean(x);
+      const variance = x.reduce((acc, v) => acc + (v - mu) ** 2, 0) / x.length;
+      const sigma = Math.sqrt(variance) || 1;
+      return x.map((v) => (v - mu) / sigma);
+    }
+
+    function rawLaplacianEnergyFromCentered(z, W) {
+      const n = z.length;
+      let energy = 0;
+      for (let i = 0; i < n; i += 1) {
+        for (let j = 0; j < n; j += 1) {
+          if (W[i][j] !== 0) energy += W[i][j] * (z[i] - z[j]) ** 2;
+        }
+      }
+      return 0.5 * energy;
+    }
+
+    function gearyStatistic(x, W) {
+      const z = centerSignal(x);
+      const denom = z.reduce((acc, v) => acc + v * v, 0);
+      const S0 = W.reduce((acc, row) => acc + row.reduce((rAcc, v) => rAcc + v, 0), 0);
+      const energy = rawLaplacianEnergyFromCentered(z, W);
+      const C = (S0 === 0 || denom === 0) ? NaN : ((z.length - 1) / S0) * energy / denom;
+      return { energy, geary: C, z };
+    }
+
+    function localGeary(z, W) {
+      const n = z.length;
+      const denom = z.reduce((acc, v) => acc + v * v, 0) / Math.max(n - 1, 1);
+      const out = Array(n).fill(0);
+      for (let i = 0; i < n; i += 1) {
+        let sum = 0;
+        for (let j = 0; j < n; j += 1) {
+          if (W[i][j] !== 0) sum += W[i][j] * (z[i] - z[j]) ** 2;
+        }
+        out[i] = denom === 0 ? 0 : sum / denom;
+      }
+      return out;
+    }
+
+    function buildDataSources(config, baseSeed) {
+      const rng = new RNG(baseSeed);
+      const n = config.nRows * config.nCols;
+      const maxFine = config.fineMax;
+      const maxCoarse = config.coarseMax;
+      const normalArray = (len) => Array.from({ length: len }, () => rng.normal());
+      return {
+        iidNoise: normalArray(n),
+        geographic: {
+          init: normalArray(n),
+          innovations: Array.from({ length: config.geographicSteps }, () => normalArray(n))
+        },
+        contextual: {
+          effect1: normalArray(maxFine),
+          effect2: normalArray(maxCoarse),
+          noise: normalArray(n)
+        },
+        mixed: {
+          geographic: {
+            init: normalArray(n),
+            innovations: Array.from({ length: config.geographicSteps }, () => normalArray(n))
+          },
+          effect1: normalArray(maxFine),
+          effect2: normalArray(maxCoarse),
+          noise: normalArray(n)
+        },
+        cross: {
+          geographic: {
+            init: normalArray(n),
+            innovations: Array.from({ length: 12 }, () => normalArray(n))
+          },
+          beta1: normalArray(maxFine),
+          beta2: normalArray(maxCoarse),
+          noise: normalArray(n)
+        }
+      };
+    }
+
+    function simulateGeographicFromSource(WRow, source, steps, blend, innovationScale) {
+      let x = source.init.slice();
+      for (let t = 0; t < steps; t += 1) {
+        const averaged = multiplyMatrixVector(WRow, x);
+        x = x.map((value, i) => (1 - blend) * value + blend * averaged[i] + innovationScale * source.innovations[t][i]);
+      }
+      return standardizeSignal(x);
+    }
+
+    function simulateContextualFromSource(labels1, labels2, source, noiseScale) {
+      const x = labels1.map((lab1, i) => source.effect1[lab1] + 1.2 * source.effect2[labels2[i]] + noiseScale * source.noise[i]);
+      return standardizeSignal(x);
+    }
+
+    function simulateMixedFromSource(config, WRow, labels1, labels2, source) {
+      const geographic = simulateGeographicFromSource(
+        WRow,
+        source.geographic,
+        config.geographicSteps,
+        config.geographicBlend,
+        config.geographicInnovation
+      );
+      const contextual = standardizeSignal(labels1.map(
+        (lab1, i) => source.effect1[lab1] + 1.2 * source.effect2[labels2[i]]
+      ));
+      const x = geographic.map(
+        (g, i) => config.mixedGeoWeight * g + config.mixedCtxWeight * contextual[i] + config.mixedNoise * source.noise[i]
+      );
+      return standardizeSignal(x);
+    }
+
+    function simulateCrossSupportFromSource(WRow, labels1, labels2, source) {
+      const geographic = simulateGeographicFromSource(
+        WRow,
+        source.geographic,
+        12,
+        0.20,
+        0.15
+      );
+      const inherited = standardizeSignal(labels1.map(
+        (lab1, i) => source.beta1[lab1] + source.beta2[labels2[i]]
+      ));
+      const x = geographic.map((g, i) => 0.20 * g + 1.10 * inherited[i] + 0.15 * source.noise[i]);
+      return standardizeSignal(x);
+    }
+
+    function multiplyMatrixVector(W, x) {
+      const n = x.length;
+      const out = Array(n).fill(0);
+      for (let i = 0; i < n; i += 1) {
+        let sum = 0;
+        for (let j = 0; j < n; j += 1) sum += W[i][j] * x[j];
+        out[i] = sum;
+      }
+      return out;
+    }
+
+    function simulateScenarios(config, WRow, labels1, labels2, dataSources) {
+      const scenarios = {
+        iid_noise: standardizeSignal(dataSources.iidNoise.slice()),
+        geographic_only: simulateGeographicFromSource(
+          WRow,
+          dataSources.geographic,
+          config.geographicSteps,
+          config.geographicBlend,
+          config.geographicInnovation
+        ),
+        contextual_only: simulateContextualFromSource(
+          labels1,
+          labels2,
+          dataSources.contextual,
+          config.contextualNoise
+        ),
+        mixed: simulateMixedFromSource(config, WRow, labels1, labels2, dataSources.mixed)
+      };
+      if (config.includeCrossSupport) {
+        scenarios.cross_support_optional = simulateCrossSupportFromSource(WRow, labels1, labels2, dataSources.cross);
+      }
+      return scenarios;
+    }
+
+    function deriveSeeds(config, runIndex) {
+      const layerBase = `${config.seed}|layers|${config.nRows}|${config.nCols}|${config.contiguity}`;
+      const dataBase = `${config.seed}|data|${config.nRows}|${config.nCols}|${config.contiguity}`;
+      if (config.randomizationMode === "hold_layers") {
+        return {
+          layerSeed: `${layerBase}|fixed`,
+          dataSeed: `${dataBase}|${runIndex}`
+        };
+      }
+      if (config.randomizationMode === "hold_data") {
+        return {
+          layerSeed: `${layerBase}|${runIndex}`,
+          dataSeed: `${dataBase}|fixed`
+        };
+      }
+      return {
+        layerSeed: `${layerBase}|${runIndex}`,
+        dataSeed: `${dataBase}|${runIndex}`
+      };
+    }
+
+    function simulateIteration(runIndex) {
+      const config = state.config;
+      const { layerSeed, dataSeed } = deriveSeeds(config, runIndex);
+      const layerRng = new RNG(layerSeed);
+      const graphs = state.graphs;
+
+      const nLayer1 = drawRegionCount(config.fineMin, config.fineMax, layerRng);
+      const nLayer2 = drawRegionCount(config.coarseMin, config.coarseMax, layerRng);
+      const labels1 = growConnectedPartition(config.nRows, config.nCols, nLayer1, layerRng, config.fineConcentration);
+      const labels2 = growConnectedPartition(config.nRows, config.nCols, nLayer2, layerRng, config.coarseConcentration);
+      const R = buildRelWeights(labels1, labels2);
+      const dataSources = buildDataSources(config, dataSeed);
+      const scenarios = simulateScenarios(config, graphs.WRow, labels1, labels2, dataSources);
+
+      const localGearyW = {};
+      const localGearyR = {};
+      const metrics = {};
+
+      for (const scenario of getScenarioList(config)) {
+        const x = scenarios[scenario];
+        const statsW = gearyStatistic(x, graphs.W);
+        const statsR = gearyStatistic(x, R);
+        localGearyW[scenario] = localGeary(statsW.z, graphs.W);
+        localGearyR[scenario] = localGeary(statsR.z, R);
+        metrics[scenario] = {
+          Geary_W: statsW.geary,
+          Geary_R: statsR.geary,
+          Energy_W: statsW.energy,
+          Energy_R: statsR.energy
+        };
+      }
+
+      return {
+        summary: {
+          run: runIndex + 1,
+          layer1Count: nLayer1,
+          layer2Count: nLayer2,
+          metrics
+        },
+        view: {
+          run: runIndex + 1,
+          layer1Count: nLayer1,
+          layer2Count: nLayer2,
+          labels1,
+          labels2,
+          scenarios,
+          localGearyW,
+          localGearyR
+        }
+      };
+    }
+
+    function ensureInitialized(forceReset = false) {
+      const config = readConfig();
+      const signature = configSignature(config);
+      if (!state.initialized || forceReset || state.configSignature !== signature) {
+        state.initialized = true;
+        state.config = config;
+        state.configSignature = signature;
+        state.graphs = buildStaticGraphs(config);
+        state.history = [];
+        state.lastView = null;
+        state.stopRequested = false;
+        refreshScenarioFocusOptions();
+        updateStatus("Initialized with the current knobs. Run the simulator to accumulate Monte Carlo draws.", false);
+        renderAll();
+      } else {
+        state.config = config;
+      }
+    }
+
+    function updateStatus(message, isRunning) {
+      document.getElementById("statusText").textContent = message;
+      document.getElementById("currentMode").textContent = state.config
+        ? state.config.randomizationMode.replaceAll("_", " ")
+        : "–";
+      document.getElementById("runsCompleted").textContent = state.history.length;
+      document.getElementById("currentLayer1").textContent = state.lastView ? state.lastView.layer1Count : "–";
+      document.getElementById("currentLayer2").textContent = state.lastView ? state.lastView.layer2Count : "–";
+      document.getElementById("iterationTag").textContent = state.lastView
+        ? `Run ${state.lastView.run}`
+        : "No runs yet";
+      state.running = isRunning;
+      setButtonStates();
+    }
+
+    function setButtonStates() {
+      const disabled = state.running;
+      document.getElementById("initializeBtn").disabled = disabled;
+      document.getElementById("run1Btn").disabled = disabled;
+      document.getElementById("run10Btn").disabled = disabled;
+      document.getElementById("runTargetBtn").disabled = disabled;
+      document.getElementById("clearBtn").disabled = disabled;
+      document.getElementById("stopBtn").disabled = !state.running;
+    }
+
+    async function runIterations(targetAdditional) {
+      ensureInitialized(false);
+      state.stopRequested = false;
+
+      const remainingCapacity = MAX_TOTAL_RUNS - state.history.length;
+      const additional = Math.max(0, Math.min(targetAdditional, remainingCapacity));
+      if (additional === 0) {
+        updateStatus(`Hard limit reached at ${MAX_TOTAL_RUNS} runs. Clear results or lower the target.`, false);
+        return;
+      }
+
+      updateStatus(`Running ${additional} additional Monte Carlo iteration${additional === 1 ? "" : "s"}...`, true);
+
+      for (let i = 0; i < additional; i += 1) {
+        if (state.stopRequested) break;
+        const iter = simulateIteration(state.history.length);
+        state.history.push(iter.summary);
+        state.lastView = iter.view;
+
+        if ((i + 1) % 5 === 0 || i === additional - 1) {
+          renderAll();
+          updateStatus(
+            state.stopRequested
+              ? `Stopped after ${state.history.length} completed runs.`
+              : `Completed ${state.history.length} run${state.history.length === 1 ? "" : "s"}.`,
+            true
+          );
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+      }
+
+      updateStatus(
+        state.stopRequested
+          ? `Stopped after ${state.history.length} completed runs.`
+          : `Completed ${state.history.length} run${state.history.length === 1 ? "" : "s"}.`,
+        false
+      );
+    }
+
+    function clearResults() {
+      state.history = [];
+      state.lastView = null;
+      renderAll();
+      updateStatus("Cleared Monte Carlo results but kept the current knobs. Reinitialize or run again.", false);
+    }
+
+    function refreshScenarioFocusOptions() {
+      const select = document.getElementById("scenarioFocus");
+      const currentValue = select.value;
+      const scenarios = getScenarioList(state.config);
+      select.innerHTML = "";
+      for (const scenario of scenarios) {
+        const option = document.createElement("option");
+        option.value = scenario;
+        option.textContent = SCENARIO_LABELS[scenario];
+        select.appendChild(option);
+      }
+      if (scenarios.includes(currentValue)) {
+        select.value = currentValue;
+      }
+    }
+
+    function interpColor(stops, t) {
+      const tt = clamp(t, 0, 1);
+      for (let i = 0; i < stops.length - 1; i += 1) {
+        const [t0, c0] = stops[i];
+        const [t1, c1] = stops[i + 1];
+        if (tt >= t0 && tt <= t1) {
+          const s = (tt - t0) / (t1 - t0 || 1);
+          const rgb = c0.map((v, idx) => Math.round(v + s * (c1[idx] - v)));
+          return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+        }
+      }
+      const last = stops[stops.length - 1][1];
+      return `rgb(${last[0]}, ${last[1]}, ${last[2]})`;
+    }
+
+    function categoricalColor(label) {
+      return TAB20[label % TAB20.length];
+    }
+
+    function renderGridCanvas(canvas, values, options) {
+      const { nRows, nCols } = state.config;
+      const discrete = options.discrete || false;
+      const cmap = options.cmap || "diverging";
+      const ctx = canvas.getContext("2d");
+      const width = canvas.width;
+      const height = canvas.height;
+      const cellW = width / nCols;
+      const cellH = height / nRows;
+      ctx.clearRect(0, 0, width, height);
+
+      let vmin = options.vmin;
+      let vmax = options.vmax;
+      if (vmin === undefined || vmax === undefined) {
+        vmin = Math.min(...values);
+        vmax = Math.max(...values);
+      }
+      if (Math.abs(vmax - vmin) < 1e-12) {
+        vmax = vmin + 1e-12;
+      }
+
+      for (let r = 0; r < nRows; r += 1) {
+        for (let c = 0; c < nCols; c += 1) {
+          const idx = cellIndex(r, c, nCols);
+          let fill = "#ffffff";
+          if (discrete) {
+            fill = categoricalColor(values[idx]);
+          } else {
+            const t = (values[idx] - vmin) / (vmax - vmin);
+            fill = cmap === "viridis" ? interpColor(VIRIDIS_STOPS, t) : interpColor(DIVERGING_STOPS, t);
+          }
+          ctx.fillStyle = fill;
+          ctx.fillRect(c * cellW, r * cellH, cellW, cellH);
+          ctx.strokeStyle = "rgba(255,255,255,0.95)";
+          ctx.lineWidth = 1;
+          ctx.strokeRect(c * cellW, r * cellH, cellW, cellH);
+        }
+      }
+    }
+
+    function renderIterationView() {
+      const container = document.getElementById("iterationGrid");
+      container.innerHTML = "";
+      if (!state.lastView) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "Run the simulator to populate the current-iteration panel.";
+        container.appendChild(empty);
+        return;
+      }
+
+      const view = state.lastView;
+      const scenarioList = getScenarioList(state.config);
+      const scenarioValues = scenarioList.flatMap((scenario) => view.scenarios[scenario]);
+      const signalAbsMax = Math.max(...scenarioValues.map((v) => Math.abs(v)), 1);
+      const localGearyMax = Math.max(
+        1,
+        ...scenarioList.flatMap((scenario) => view.localGearyW[scenario]),
+        ...scenarioList.flatMap((scenario) => view.localGearyR[scenario])
+      );
+
+      const supportColumn = (title, labels) => {
+        const column = document.createElement("div");
+        column.className = "support-column";
+        const h3 = document.createElement("h3");
+        h3.textContent = title;
+        column.appendChild(h3);
+        const label = document.createElement("div");
+        label.className = "canvas-label";
+        label.textContent = "Support labels";
+        column.appendChild(label);
+        const canvas = document.createElement("canvas");
+        canvas.width = 360;
+        canvas.height = 360;
+        column.appendChild(canvas);
+        renderGridCanvas(canvas, labels, { discrete: true });
+        return column;
+      };
+
+      container.appendChild(supportColumn(`Layer 1 (${view.layer1Count} regions)`, view.labels1));
+      container.appendChild(supportColumn(`Layer 2 (${view.layer2Count} regions)`, view.labels2));
+
+      for (const scenario of scenarioList) {
+        const column = document.createElement("div");
+        column.className = "scenario-column";
+        const h3 = document.createElement("h3");
+        h3.textContent = SCENARIO_LABELS[scenario];
+        column.appendChild(h3);
+
+        const blocks = [
+          { label: "Signal", values: view.scenarios[scenario], cmap: "diverging", vmin: -signalAbsMax, vmax: signalAbsMax },
+          { label: "Local Geary W", values: view.localGearyW[scenario], cmap: "viridis", vmin: 0, vmax: localGearyMax },
+          { label: "Local Geary R", values: view.localGearyR[scenario], cmap: "viridis", vmin: 0, vmax: localGearyMax }
+        ];
+
+        for (const block of blocks) {
+          const wrap = document.createElement("div");
+          wrap.className = "canvas-wrap";
+          const label = document.createElement("div");
+          label.className = "canvas-label";
+          label.textContent = block.label;
+          wrap.appendChild(label);
+          const canvas = document.createElement("canvas");
+          canvas.width = 320;
+          canvas.height = 320;
+          wrap.appendChild(canvas);
+          column.appendChild(wrap);
+          renderGridCanvas(canvas, block.values, {
+            discrete: false,
+            cmap: block.cmap,
+            vmin: block.vmin,
+            vmax: block.vmax
+          });
+        }
+        container.appendChild(column);
+      }
+    }
+
+    function getScenarioSeries(scenario, metricKey) {
+      return state.history.map((run) => run.metrics[scenario][metricKey]);
+    }
+
+    function kde(values, nGrid = 200) {
+      if (!values.length) return null;
+      const minV = Math.min(...values);
+      const maxV = Math.max(...values);
+      const spread = Math.max(maxV - minV, 1e-3);
+      const sigma = Math.max(sd(values), spread / 25, 1e-3);
+      const bandwidth = Math.max(1.06 * sigma * Math.pow(values.length, -1 / 5), spread / 40, 1e-3);
+      const xs = linspace(minV - 0.12 * spread - bandwidth, maxV + 0.12 * spread + bandwidth, nGrid);
+      const denom = values.length * bandwidth * Math.sqrt(2 * Math.PI);
+      const ys = xs.map((x) => {
+        let total = 0;
+        for (const value of values) {
+          const z = (x - value) / bandwidth;
+          total += Math.exp(-0.5 * z * z);
+        }
+        return total / denom;
+      });
+      return { xs, ys };
+    }
+
+    function renderDistributionChart() {
+      const scenario = document.getElementById("scenarioFocus").value;
+      const container = document.getElementById("distributionChart");
+      if (!state.history.length || !scenario) {
+        Plotly.react(container, [], {
+          margin: { t: 10, r: 16, b: 42, l: 48 },
+          xaxis: { title: "Global Geary" },
+          yaxis: { title: "Density" },
+          annotations: [{
+            text: "Run the simulator to build the W vs R distribution.",
+            xref: "paper",
+            yref: "paper",
+            x: 0.5,
+            y: 0.5,
+            showarrow: false,
+            font: { color: "#64748b", size: 14 }
+          }]
+        }, { displayModeBar: false, responsive: true });
+        return;
+      }
+
+      const wValues = getScenarioSeries(scenario, "Geary_W");
+      const rValues = getScenarioSeries(scenario, "Geary_R");
+      const kdeW = kde(wValues);
+      const kdeR = kde(rValues);
+      const traces = [];
+
+      if (kdeW) {
+        traces.push({
+          x: kdeW.xs,
+          y: kdeW.ys,
+          type: "scatter",
+          mode: "lines",
+          name: "Geary W",
+          line: { color: "#3f72af", width: 3 },
+          fill: "tozeroy",
+          fillcolor: "rgba(63, 114, 175, 0.18)"
+        });
+      }
+      if (kdeR) {
+        traces.push({
+          x: kdeR.xs,
+          y: kdeR.ys,
+          type: "scatter",
+          mode: "lines",
+          name: "Geary R",
+          line: { color: "#d97706", width: 3 },
+          fill: "tozeroy",
+          fillcolor: "rgba(217, 119, 6, 0.18)"
+        });
+      }
+
+      Plotly.react(container, traces, {
+        margin: { t: 10, r: 16, b: 44, l: 48 },
+        paper_bgcolor: "white",
+        plot_bgcolor: "white",
+        xaxis: {
+          title: `${SCENARIO_LABELS[scenario]}: global Geary`,
+          zeroline: false,
+          gridcolor: "rgba(148,163,184,0.18)"
+        },
+        yaxis: {
+          title: "Density",
+          zeroline: false,
+          gridcolor: "rgba(148,163,184,0.18)"
+        },
+        shapes: [{
+          type: "line",
+          x0: 1,
+          x1: 1,
+          y0: 0,
+          y1: 1,
+          yref: "paper",
+          line: { color: "#475569", width: 1.5, dash: "dash" }
+        }],
+        legend: { orientation: "h", x: 0.02, y: 1.12 },
+        hovermode: "x unified"
+      }, { displayModeBar: false, responsive: true });
+    }
+
+    function renderCumulativeChart() {
+      const scenario = document.getElementById("scenarioFocus").value;
+      const container = document.getElementById("cumulativeChart");
+      if (!state.history.length || !scenario) {
+        Plotly.react(container, [], {
+          margin: { t: 10, r: 16, b: 42, l: 48 },
+          annotations: [{
+            text: "No cumulative trace yet.",
+            xref: "paper",
+            yref: "paper",
+            x: 0.5,
+            y: 0.5,
+            showarrow: false,
+            font: { color: "#64748b", size: 14 }
+          }]
+        }, { displayModeBar: false, responsive: true });
+        return;
+      }
+
+      const x = state.history.map((run) => run.run);
+      const w = getScenarioSeries(scenario, "Geary_W");
+      const r = getScenarioSeries(scenario, "Geary_R");
+      const cumMean = (values) => {
+        let total = 0;
+        return values.map((v, idx) => {
+          total += v;
+          return total / (idx + 1);
+        });
+      };
+
+      Plotly.react(container, [
+        {
+          x,
+          y: cumMean(w),
+          type: "scatter",
+          mode: "lines+markers",
+          name: "Geary W",
+          line: { color: "#3f72af", width: 3 },
+          marker: { size: 4 }
+        },
+        {
+          x,
+          y: cumMean(r),
+          type: "scatter",
+          mode: "lines+markers",
+          name: "Geary R",
+          line: { color: "#d97706", width: 3 },
+          marker: { size: 4 }
+        }
+      ], {
+        margin: { t: 10, r: 16, b: 44, l: 48 },
+        xaxis: {
+          title: "Run index",
+          gridcolor: "rgba(148,163,184,0.18)"
+        },
+        yaxis: {
+          title: "Cumulative mean Geary",
+          gridcolor: "rgba(148,163,184,0.18)"
+        },
+        shapes: [{
+          type: "line",
+          x0: 0,
+          x1: 1,
+          xref: "paper",
+          y0: 1,
+          y1: 1,
+          line: { color: "#475569", width: 1.5, dash: "dash" }
+        }],
+        legend: { orientation: "h", x: 0.02, y: 1.12 },
+        hovermode: "x unified"
+      }, { displayModeBar: false, responsive: true });
+    }
+
+    function renderScatterChart() {
+      const scenario = document.getElementById("scenarioFocus").value;
+      const container = document.getElementById("scatterChart");
+      if (!state.history.length || !scenario) {
+        Plotly.react(container, [], {
+          margin: { t: 10, r: 16, b: 42, l: 48 },
+          annotations: [{
+            text: "No scatter yet.",
+            xref: "paper",
+            yref: "paper",
+            x: 0.5,
+            y: 0.5,
+            showarrow: false,
+            font: { color: "#64748b", size: 14 }
+          }]
+        }, { displayModeBar: false, responsive: true });
+        return;
+      }
+
+      const w = getScenarioSeries(scenario, "Geary_W");
+      const r = getScenarioSeries(scenario, "Geary_R");
+      const rangeMin = Math.min(...w, ...r);
+      const rangeMax = Math.max(...w, ...r);
+
+      Plotly.react(container, [
+        {
+          x: w,
+          y: r,
+          type: "scatter",
+          mode: "markers",
+          marker: {
+            size: 8,
+            color: state.history.map((run) => run.run),
+            colorscale: "Viridis",
+            colorbar: { title: "Run" },
+            opacity: 0.82
+          },
+          text: state.history.map((run) => `Run ${run.run}`),
+          hovertemplate: "Run %{text}<br>Geary W: %{x:.3f}<br>Geary R: %{y:.3f}<extra></extra>",
+          name: "Runs"
+        }
+      ], {
+        margin: { t: 10, r: 16, b: 44, l: 48 },
+        xaxis: {
+          title: "Geary W",
+          gridcolor: "rgba(148,163,184,0.18)"
+        },
+        yaxis: {
+          title: "Geary R",
+          gridcolor: "rgba(148,163,184,0.18)"
+        },
+        shapes: [{
+          type: "line",
+          x0: rangeMin,
+          x1: rangeMax,
+          y0: rangeMin,
+          y1: rangeMax,
+          line: { color: "#475569", width: 1.5, dash: "dash" }
+        }],
+        showlegend: false
+      }, { displayModeBar: false, responsive: true });
+    }
+
+    function renderSummaryTable() {
+      const target = document.getElementById("summaryTable");
+      if (!state.history.length) {
+        target.innerHTML = '<div class="empty">Scenario summaries appear once runs have been collected.</div>';
+        return;
+      }
+
+      const scenarios = getScenarioList(state.config);
+      let html = '<div class="table-wrap"><table><thead><tr>' +
+        '<th>Scenario</th><th>Mean Geary W</th><th>SD Geary W</th><th>Mean Geary R</th><th>SD Geary R</th>' +
+        '<th>Mean Energy W</th><th>Mean Energy R</th><th>Mean Layer 1</th><th>Mean Layer 2</th><th>Stronger support</th>' +
+        '</tr></thead><tbody>';
+
+      for (const scenario of scenarios) {
+        const gearyW = getScenarioSeries(scenario, "Geary_W");
+        const gearyR = getScenarioSeries(scenario, "Geary_R");
+        const energyW = getScenarioSeries(scenario, "Energy_W");
+        const energyR = getScenarioSeries(scenario, "Energy_R");
+        const layer1 = state.history.map((run) => run.layer1Count);
+        const layer2 = state.history.map((run) => run.layer2Count);
+        const stronger = mean(gearyW) < mean(gearyR) ? "W (geographic)" : "R (contextual)";
+
+        html += `<tr>
+          <td>${SCENARIO_LABELS[scenario]}</td>
+          <td>${mean(gearyW).toFixed(3)}</td>
+          <td>${sd(gearyW).toFixed(3)}</td>
+          <td>${mean(gearyR).toFixed(3)}</td>
+          <td>${sd(gearyR).toFixed(3)}</td>
+          <td>${mean(energyW).toFixed(1)}</td>
+          <td>${mean(energyR).toFixed(1)}</td>
+          <td>${mean(layer1).toFixed(2)}</td>
+          <td>${mean(layer2).toFixed(2)}</td>
+          <td>${stronger}</td>
+        </tr>`;
+      }
+      html += "</tbody></table></div>";
+      target.innerHTML = html;
+    }
+
+    function renderAll() {
+      renderIterationView();
+      renderDistributionChart();
+      renderCumulativeChart();
+      renderScatterChart();
+      renderSummaryTable();
+      document.getElementById("runsCompleted").textContent = state.history.length;
+      document.getElementById("currentLayer1").textContent = state.lastView ? state.lastView.layer1Count : "–";
+      document.getElementById("currentLayer2").textContent = state.lastView ? state.lastView.layer2Count : "–";
+      document.getElementById("iterationTag").textContent = state.lastView ? `Run ${state.lastView.run}` : "No runs yet";
+    }
+
+    function bindEvents() {
+      document.getElementById("initializeBtn").addEventListener("click", () => ensureInitialized(true));
+      document.getElementById("run1Btn").addEventListener("click", () => runIterations(1));
+      document.getElementById("run10Btn").addEventListener("click", () => runIterations(10));
+      document.getElementById("runTargetBtn").addEventListener("click", () => {
+        ensureInitialized(false);
+        const target = readConfig().targetRuns;
+        runIterations(Math.max(0, target - state.history.length));
+      });
+      document.getElementById("stopBtn").addEventListener("click", () => {
+        state.stopRequested = true;
+        updateStatus(`Stop requested. Finishing the current batch at ${state.history.length} completed runs.`, true);
+      });
+      document.getElementById("clearBtn").addEventListener("click", clearResults);
+      document.getElementById("scenarioFocus").addEventListener("change", renderAll);
+    }
+
+    function bootstrap() {
+      bindEvents();
+      ensureInitialized(true);
+      renderAll();
+      updateStatus("Initialized with the default knobs. Use the run controls to start accumulating iterations.", false);
+    }
+
+    bootstrap();
+  </script>
+</body>
+</html>

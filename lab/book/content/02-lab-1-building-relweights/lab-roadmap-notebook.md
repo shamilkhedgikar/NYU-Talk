@@ -1171,6 +1171,513 @@ def build_eigenvalue_linked_html(
     return html
 
 
+def build_eigenvalue_linked_html_v2(
+    districts: gpd.GeoDataFrame,
+    eigenvalues: np.ndarray,
+    eigenvectors: np.ndarray,
+    id_col: str = "ac_id",
+    name_col: str = "AC_NAME",
+    district_col: str = "DIST_NAME",
+) -> str:
+    """Create a 5-panel Plotly HTML view for modal loading and signed graph cuts."""
+
+    districts_ll = districts[[id_col, name_col, district_col, "geometry"]].copy().to_crs("EPSG:4326")
+    districts_ll[id_col] = districts_ll[id_col].astype(str)
+    districts_ll[name_col] = districts_ll[name_col].fillna(districts_ll[id_col])
+    districts_ll[district_col] = districts_ll[district_col].fillna("")
+
+    geojson = json.loads(districts_ll.to_json())
+    district_ids = districts_ll[id_col].tolist()
+    district_labels = [
+        f"{row[id_col]} | {row[name_col]} | {row[district_col]}".strip(" |")
+        for _, row in districts_ll.iterrows()
+    ]
+    district_points = districts_ll.geometry.representative_point()
+    district_lons = district_points.x.tolist()
+    district_lats = district_points.y.tolist()
+
+    eigvals = np.asarray(eigenvalues, dtype=float).tolist()
+    eigvecs = np.asarray(eigenvectors, dtype=float).tolist()
+    default_mode = 1 if len(eigvals) > 1 else 0
+
+    html = f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    body {{
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      background: #ffffff;
+      color: #111827;
+    }}
+    .wrapper {{
+      display: grid;
+      grid-template-columns: minmax(300px, 0.95fr) minmax(360px, 1fr) minmax(360px, 1fr);
+      gap: 12px;
+      padding: 12px;
+      align-items: start;
+    }}
+    .panel {{
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      background: #ffffff;
+      overflow: hidden;
+    }}
+    .surface-span {{
+      grid-column: 2 / span 2;
+    }}
+    #eig-panel, #loading-map-panel, #signed-map-panel {{
+      height: 520px;
+    }}
+    #rank-panel {{
+      height: 440px;
+    }}
+    #surface-panel {{
+      height: 440px;
+    }}
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="panel"><div id="eig-panel"></div></div>
+    <div class="panel"><div id="loading-map-panel"></div></div>
+    <div class="panel"><div id="signed-map-panel"></div></div>
+    <div class="panel"><div id="rank-panel"></div></div>
+    <div class="panel surface-span"><div id="surface-panel"></div></div>
+  </div>
+  <script>
+    const eigenvalues = {json.dumps(eigvals)};
+    const eigenvectors = {json.dumps(eigvecs)};
+    const districtIds = {json.dumps(district_ids)};
+    const districtLabels = {json.dumps(district_labels)};
+    const districtGeoJson = {json.dumps(geojson)};
+    const districtLons = {json.dumps(district_lons)};
+    const districtLats = {json.dumps(district_lats)};
+    const defaultSelection = [{default_mode}];
+
+    function selectedModes(indices) {{
+      return (indices && indices.length) ? indices.slice().sort((a, b) => a - b) : defaultSelection.slice();
+    }}
+
+    function activeMode(indices) {{
+      return selectedModes(indices)[0];
+    }}
+
+    function loadingFromSelection(indices) {{
+      const useIndices = selectedModes(indices);
+      const scores = eigenvectors.map((row) => {{
+        let total = 0;
+        useIndices.forEach((k) => {{
+          total += row[k] * row[k];
+        }});
+        return Math.sqrt(total);
+      }});
+      const maxScore = Math.max(...scores, 1e-12);
+      return scores.map((value) => value / maxScore);
+    }}
+
+    function signedModeVector(modeIndex) {{
+      return eigenvectors.map((row) => row[modeIndex]);
+    }}
+
+    function positiveModeValues(values) {{
+      return values.map((value) => value > 0 ? value : null);
+    }}
+
+    function negativeModeValues(values) {{
+      return values.map((value) => value < 0 ? Math.abs(value) : null);
+    }}
+
+    function scoreCustomData(scores) {{
+      return districtLabels.map((label, idx) => [label, scores[idx]]);
+    }}
+
+    function signedCustomData(values) {{
+      return districtLabels.map((label, idx) => [label, values[idx]]);
+    }}
+
+    function selectionLabel(indices) {{
+      return selectedModes(indices)
+        .map((idx) => `lambda_${{idx + 1}} = ${{eigenvalues[idx].toFixed(4)}}`)
+        .join(", ");
+    }}
+
+    function activeModeLabel(modeIndex) {{
+      return `lambda_${{modeIndex + 1}} = ${{eigenvalues[modeIndex].toFixed(4)}}`;
+    }}
+
+    function markerColors(indices) {{
+      const useSet = new Set(selectedModes(indices));
+      return eigenvalues.map((_, idx) => useSet.has(idx) ? "#ea580c" : "#2563eb");
+    }}
+
+    const signedSurfaceScale = [
+      [0.0, "#053061"],
+      [0.1, "#2166ac"],
+      [0.2, "#4393c3"],
+      [0.3, "#92c5de"],
+      [0.4, "#d1e5f0"],
+      [0.5, "#f7f7f7"],
+      [0.6, "#fddbc7"],
+      [0.7, "#f4a582"],
+      [0.8, "#d6604d"],
+      [0.9, "#b2182b"],
+      [1.0, "#67001f"]
+    ];
+
+    const negativeSignedScale = [
+      [0.0, "#f7f7f7"],
+      [0.25, "#d1e5f0"],
+      [0.5, "#92c5de"],
+      [0.75, "#4393c3"],
+      [1.0, "#053061"]
+    ];
+
+    const positiveSignedScale = [
+      [0.0, "#f7f7f7"],
+      [0.25, "#fddbc7"],
+      [0.5, "#f4a582"],
+      [0.75, "#d6604d"],
+      [1.0, "#67001f"]
+    ];
+
+    function buildSurfaceFromValues(values, gridSize = 38) {{
+      const lonMin = Math.min(...districtLons);
+      const lonMax = Math.max(...districtLons);
+      const latMin = Math.min(...districtLats);
+      const latMax = Math.max(...districtLats);
+      const lonPad = 0.08 * (lonMax - lonMin || 1);
+      const latPad = 0.08 * (latMax - latMin || 1);
+      const xs = Array.from({{ length: gridSize }}, (_, i) =>
+        (lonMin - lonPad) + (i * (lonMax - lonMin + 2 * lonPad)) / (gridSize - 1)
+      );
+      const ys = Array.from({{ length: gridSize }}, (_, j) =>
+        (latMin - latPad) + (j * (latMax - latMin + 2 * latPad)) / (gridSize - 1)
+      );
+      const z = ys.map((lat) => xs.map((lon) => {{
+        let weightedTotal = 0;
+        let weightSum = 0;
+        for (let i = 0; i < values.length; i += 1) {{
+          const dx = lon - districtLons[i];
+          const dy = lat - districtLats[i];
+          const d2 = dx * dx + dy * dy;
+          if (d2 < 1e-10) {{
+            return values[i];
+          }}
+          const w = 1.0 / d2;
+          weightedTotal += w * values[i];
+          weightSum += w;
+        }}
+        return weightedTotal / weightSum;
+      }}));
+      return {{ xs, ys, z }};
+    }}
+
+    function sortedMode(values) {{
+      const rows = values.map((value, idx) => ({{ idx, value, label: districtLabels[idx] }}));
+      rows.sort((a, b) => a.value - b.value);
+      return {{
+        ranks: rows.map((_, idx) => idx + 1),
+        values: rows.map((row) => row.value),
+        labels: rows.map((row) => row.label)
+      }};
+    }}
+
+    const initialLoading = loadingFromSelection(defaultSelection);
+    const initialMode = activeMode(defaultSelection);
+    const initialSigned = signedModeVector(initialMode);
+    const initialAbs = Math.max(...initialSigned.map((value) => Math.abs(value)), 1e-12);
+    const initialRank = sortedMode(initialSigned);
+    const initialSurface = buildSurfaceFromValues(initialSigned);
+
+    const eigTrace = {{
+      type: "scatter",
+      mode: "markers+lines",
+      x: eigenvalues.map((_, idx) => idx + 1),
+      y: eigenvalues,
+      marker: {{
+        size: 9,
+        color: markerColors(defaultSelection),
+        line: {{ color: "#ffffff", width: 0.8 }}
+      }},
+      line: {{ color: "#94a3b8", width: 1.2 }},
+      hovertemplate: "Mode %{{x}}<br>Eigenvalue: %{{y:.5f}}<extra></extra>"
+    }};
+
+    const loadingMapTrace = {{
+      type: "choropleth",
+      geojson: districtGeoJson,
+      featureidkey: "properties.{id_col}",
+      locations: districtIds,
+      z: initialLoading,
+      zmin: 0,
+      zmax: 1,
+      colorscale: "YlOrRd",
+      marker: {{ line: {{ color: "#374151", width: 0.65 }} }},
+      colorbar: {{ title: "Modal loading" }},
+      customdata: scoreCustomData(initialLoading),
+      hovertemplate: "%{{customdata[0]}}<br>Selected-mode loading: %{{z:.3f}}<extra></extra>"
+    }};
+
+    const signedPositiveTrace = {{
+      type: "choropleth",
+      geojson: districtGeoJson,
+      featureidkey: "properties.{id_col}",
+      locations: districtIds,
+      z: positiveModeValues(initialSigned),
+      zmin: 0,
+      zmax: initialAbs,
+      colorscale: positiveSignedScale,
+      marker: {{ line: {{ color: "#374151", width: 0.65 }} }},
+      name: "u_k(i) > 0",
+      showlegend: true,
+      showscale: false,
+      customdata: signedCustomData(initialSigned),
+      hovertemplate: "%{{customdata[0]}}<br>u_k(i): %{{customdata[1]:.4f}}<extra></extra>"
+    }};
+
+    const signedNegativeTrace = {{
+      type: "choropleth",
+      geojson: districtGeoJson,
+      featureidkey: "properties.{id_col}",
+      locations: districtIds,
+      z: negativeModeValues(initialSigned),
+      zmin: 0,
+      zmax: initialAbs,
+      colorscale: negativeSignedScale,
+      marker: {{ line: {{ color: "#374151", width: 0.65 }} }},
+      name: "u_k(i) < 0",
+      showlegend: true,
+      showscale: false,
+      customdata: signedCustomData(initialSigned),
+      hovertemplate: "%{{customdata[0]}}<br>u_k(i): %{{customdata[1]:.4f}}<extra></extra>"
+    }};
+
+    const rankTrace = {{
+      type: "scatter",
+      mode: "markers+lines",
+      x: initialRank.ranks,
+      y: initialRank.values,
+      text: initialRank.labels,
+      marker: {{
+        size: 7,
+        color: initialRank.values,
+        colorscale: "RdBu",
+        reversescale: true,
+        cmin: -initialAbs,
+        cmax: initialAbs,
+        line: {{ color: "#ffffff", width: 0.4 }}
+      }},
+      line: {{ color: "#64748b", width: 1.1 }},
+      hovertemplate: "%{{text}}<br>rank: %{{x}}<br>u_k(i): %{{y:.4f}}<extra></extra>"
+    }};
+
+    const surfaceTrace = {{
+      type: "surface",
+      x: initialSurface.xs,
+      y: initialSurface.ys,
+      z: initialSurface.z,
+      colorscale: signedSurfaceScale,
+      cmin: -initialAbs,
+      cmax: initialAbs,
+      colorbar: {{ title: "u_k value" }},
+      hovertemplate: "lon: %{{x:.3f}}<br>lat: %{{y:.3f}}<br>u_k surface: %{{z:.4f}}<extra></extra>"
+    }};
+
+    const surfacePoints = {{
+      type: "scatter3d",
+      mode: "markers",
+      x: districtLons,
+      y: districtLats,
+      z: initialSigned,
+      marker: {{
+        size: 4,
+        color: initialSigned,
+        colorscale: signedSurfaceScale,
+        cmin: -initialAbs,
+        cmax: initialAbs,
+        line: {{ color: "#111827", width: 0.3 }}
+      }},
+      text: districtLabels,
+      hovertemplate: "%{{text}}<br>u_k(i): %{{marker.color:.4f}}<extra></extra>",
+      showlegend: false
+    }};
+
+    Plotly.newPlot("eig-panel", [eigTrace], {{
+      title: {{ text: "RelWeights eigenvalue spectrum" }},
+      margin: {{ l: 55, r: 20, t: 50, b: 50 }},
+      dragmode: "select",
+      xaxis: {{ title: "Eigenvalue index", dtick: 5 }},
+      yaxis: {{ title: "Eigenvalue" }},
+      paper_bgcolor: "#ffffff",
+      plot_bgcolor: "#ffffff"
+    }}, {{ displayModeBar: true, responsive: true }});
+
+    Plotly.newPlot("loading-map-panel", [loadingMapTrace], {{
+      title: {{ text: `Modal loading over selected modes<br><sup>${{selectionLabel(defaultSelection)}}</sup>` }},
+      margin: {{ l: 10, r: 10, t: 60, b: 10 }},
+      geo: {{
+        fitbounds: "locations",
+        visible: false,
+        projection: {{ type: "mercator" }}
+      }},
+      paper_bgcolor: "#ffffff"
+    }}, {{ displayModeBar: true, responsive: true }});
+
+    Plotly.newPlot("signed-map-panel", [signedPositiveTrace, signedNegativeTrace], {{
+      title: {{ text: `Signed district map for active mode<br><sup>${{activeModeLabel(initialMode)}}</sup>` }},
+      margin: {{ l: 10, r: 10, t: 60, b: 10 }},
+      legend: {{
+        orientation: "h",
+        yanchor: "bottom",
+        y: 1.01,
+        xanchor: "left",
+        x: 0.02
+      }},
+      geo: {{
+        fitbounds: "locations",
+        visible: false,
+        projection: {{ type: "mercator" }}
+      }},
+      paper_bgcolor: "#ffffff"
+    }}, {{ displayModeBar: true, responsive: true }});
+
+    Plotly.newPlot("rank-panel", [rankTrace], {{
+      title: {{ text: `Sorted active eigenvector values<br><sup>${{activeModeLabel(initialMode)}}</sup>` }},
+      margin: {{ l: 55, r: 20, t: 50, b: 50 }},
+      xaxis: {{ title: "Ordered rank" }},
+      yaxis: {{ title: "u_k(i)", zeroline: true, zerolinecolor: "#111827" }},
+      paper_bgcolor: "#ffffff",
+      plot_bgcolor: "#ffffff",
+      shapes: [
+        {{
+          type: "line",
+          x0: 1,
+          x1: districtIds.length,
+          y0: 0,
+          y1: 0,
+          line: {{ color: "#111827", width: 1.0, dash: "dash" }}
+        }}
+      ]
+    }}, {{ displayModeBar: true, responsive: true }});
+
+    Plotly.newPlot("surface-panel", [surfaceTrace, surfacePoints], {{
+      title: {{ text: `3D signed cut surface for active mode<br><sup>${{activeModeLabel(initialMode)}}</sup>` }},
+      margin: {{ l: 0, r: 0, t: 60, b: 0 }},
+      paper_bgcolor: "#ffffff",
+      scene: {{
+        xaxis: {{ title: "Longitude" }},
+        yaxis: {{ title: "Latitude" }},
+        zaxis: {{ title: "u_k value" }},
+        aspectratio: {{ x: 1.0, y: 1.0, z: 0.55 }}
+      }}
+    }}, {{ displayModeBar: true, responsive: true }});
+
+    function updateSelection(indices) {{
+      const useIndices = selectedModes(indices);
+      const mode = activeMode(useIndices);
+      const loading = loadingFromSelection(useIndices);
+      const signed = signedModeVector(mode);
+      const signedAbs = Math.max(...signed.map((value) => Math.abs(value)), 1e-12);
+      const rankData = sortedMode(signed);
+      const surface = buildSurfaceFromValues(signed);
+
+      Plotly.restyle("eig-panel", {{
+        "marker.color": [markerColors(useIndices)]
+      }});
+      Plotly.relayout("eig-panel", {{ selections: [] }});
+
+      Plotly.restyle("loading-map-panel", {{
+        z: [loading],
+        customdata: [scoreCustomData(loading)]
+      }});
+      Plotly.relayout("loading-map-panel", {{
+        "title.text": `Modal loading over selected modes<br><sup>${{selectionLabel(useIndices)}}</sup>`
+      }});
+
+      Plotly.restyle("signed-map-panel", {{
+        z: [positiveModeValues(signed)],
+        customdata: [signedCustomData(signed)],
+        zmin: [0],
+        zmax: [signedAbs]
+      }}, [0]);
+      Plotly.restyle("signed-map-panel", {{
+        z: [negativeModeValues(signed)],
+        customdata: [signedCustomData(signed)],
+        zmin: [0],
+        zmax: [signedAbs]
+      }}, [1]);
+      Plotly.relayout("signed-map-panel", {{
+        "title.text": `Signed district map for active mode<br><sup>${{activeModeLabel(mode)}}</sup>`
+      }});
+
+      Plotly.restyle("rank-panel", {{
+        x: [rankData.ranks],
+        y: [rankData.values],
+        text: [rankData.labels],
+        "marker.color": [rankData.values],
+        "marker.cmin": [-signedAbs],
+        "marker.cmax": [signedAbs]
+      }});
+      Plotly.relayout("rank-panel", {{
+        "title.text": `Sorted active eigenvector values<br><sup>${{activeModeLabel(mode)}}</sup>`
+      }});
+
+      Plotly.restyle("surface-panel", {{
+        z: [surface.z],
+        x: [surface.xs],
+        y: [surface.ys],
+        cmin: [-signedAbs],
+        cmax: [signedAbs]
+      }}, [0]);
+      Plotly.restyle("surface-panel", {{
+        z: [signed],
+        "marker.color": [signed],
+        "marker.cmin": [-signedAbs],
+        "marker.cmax": [signedAbs]
+      }}, [1]);
+      Plotly.relayout("surface-panel", {{
+        "title.text": `3D signed cut surface for active mode<br><sup>${{activeModeLabel(mode)}}</sup>`
+      }});
+    }}
+
+    const eigPanel = document.getElementById("eig-panel");
+
+    eigPanel.on("plotly_selected", (eventData) => {{
+      if (!eventData || !eventData.points || !eventData.points.length) {{
+        updateSelection(defaultSelection);
+        return;
+      }}
+      const indices = [...new Set(eventData.points.map((pt) => pt.pointIndex))].sort((a, b) => a - b);
+      updateSelection(indices);
+    }});
+
+    eigPanel.on("plotly_deselect", () => {{
+      updateSelection(defaultSelection);
+    }});
+
+    eigPanel.on("plotly_click", (eventData) => {{
+      if (!eventData || !eventData.points || !eventData.points.length) {{
+        return;
+      }}
+      updateSelection([eventData.points[0].pointIndex]);
+    }});
+
+    eigPanel.on("plotly_doubleclick", () => {{
+      setTimeout(() => updateSelection(defaultSelection), 0);
+    }});
+  </script>
+</body>
+</html>
+"""
+    return html
+
+
 def plot_layer(
     layer: gpd.GeoDataFrame,
     color_column: str,
@@ -1803,7 +2310,7 @@ $$
 where $S$ is the set of selected eigenmodes and $u_{ik}$ is district $i$'s entry in eigenvector $u_k$.
 
 ```{code-cell} ipython3
-eigen_link_html = build_eigenvalue_linked_html(
+eigen_link_html = build_eigenvalue_linked_html_v2(
     districts=districts,
     eigenvalues=eigvals_R,
     eigenvectors=eigvecs_R,
