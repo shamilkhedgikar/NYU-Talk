@@ -45,6 +45,7 @@ import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
 from IPython.display import HTML, display
 from matplotlib.lines import Line2D
 from shapely.geometry import LineString
@@ -587,6 +588,38 @@ def save_and_embed_folium_map(
     )
 
 
+def save_and_embed_html_document(
+    html_text: str,
+    output_path: Path,
+    height: int = 700,
+) -> None:
+    """Save a standalone HTML document and embed it back into the notebook."""
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(html_text, encoding="utf-8")
+    rel_path = output_path.as_posix()
+    data_uri = "data:text/html;base64," + base64.b64encode(output_path.read_bytes()).decode("ascii")
+    display(
+        HTML(
+            f"""
+            <div style="margin: 0.5rem 0 1rem 0;">
+              <iframe
+                src="{data_uri}"
+                width="100%"
+                height="{height}"
+                style="border: 1px solid #d1d5db; border-radius: 8px; background: white;"
+              ></iframe>
+              <div style="margin-top: 0.5rem; font-size: 0.92rem;">
+                <a href="{rel_path}" target="_blank" rel="noopener noreferrer">
+                  Open standalone interactive graphic
+                </a>
+              </div>
+            </div>
+            """
+        )
+    )
+
+
 def centered_laplacian_energy(values: np.ndarray, laplacian_df: pd.DataFrame) -> float:
     """Return z' L z for the centered signal z."""
 
@@ -738,24 +771,40 @@ def plot_surface_3d(
     surface: np.ndarray,
     title: str,
 ) -> None:
-    """Render a gridded surface as a 3D plot."""
+    """Render a gridded surface as an interactive Plotly 3D surface."""
 
-    fig = plt.figure(figsize=(9, 7))
-    ax = fig.add_subplot(111, projection="3d")
-    ax.plot_surface(
-        xx / 1000.0,
-        yy / 1000.0,
-        np.ma.masked_invalid(surface),
-        cmap="viridis",
-        linewidth=0,
-        antialiased=True,
-        alpha=0.95,
+    plot_surface = np.array(surface, dtype=float)
+    plot_surface[np.isnan(plot_surface)] = np.nan
+
+    fig = go.Figure(
+        data=[
+            go.Surface(
+                x=xx / 1000.0,
+                y=yy / 1000.0,
+                z=plot_surface,
+                colorscale="Viridis",
+                colorbar={"title": "Surface value"},
+                hovertemplate=(
+                    "x: %{x:.1f} km<br>"
+                    "y: %{y:.1f} km<br>"
+                    "value: %{z:.3f}<extra></extra>"
+                ),
+            )
+        ]
     )
-    ax.set_title(title)
-    ax.set_xlabel("Projected x (km)")
-    ax.set_ylabel("Projected y (km)")
-    ax.set_zlabel("Surface value")
-    plt.show()
+    fig.update_layout(
+        title=title,
+        width=900,
+        height=700,
+        margin=dict(l=0, r=0, b=0, t=50),
+        scene=dict(
+            xaxis_title="Projected x (km)",
+            yaxis_title="Projected y (km)",
+            zaxis_title="Surface value",
+            aspectmode="auto",
+        ),
+    )
+    fig.show()
 
 
 def plot_surface_2d(
@@ -820,6 +869,306 @@ def plot_eigen_spectrum(eigenvalues: np.ndarray, title: str, color: str) -> None
     ax.set_ylabel("Eigenvalue")
     ax.grid(alpha=0.25)
     plt.show()
+
+
+def build_eigenvalue_linked_html(
+    districts: gpd.GeoDataFrame,
+    eigenvalues: np.ndarray,
+    eigenvectors: np.ndarray,
+    id_col: str = "ac_id",
+    name_col: str = "AC_NAME",
+    district_col: str = "DIST_NAME",
+) -> str:
+    """Create a standalone Plotly HTML document that links eigenvalue selection to districts."""
+
+    districts_ll = districts[[id_col, name_col, district_col, "geometry"]].copy().to_crs("EPSG:4326")
+    districts_ll[id_col] = districts_ll[id_col].astype(str)
+    districts_ll[name_col] = districts_ll[name_col].fillna(districts_ll[id_col])
+    districts_ll[district_col] = districts_ll[district_col].fillna("")
+
+    geojson = json.loads(districts_ll.to_json())
+    district_ids = districts_ll[id_col].tolist()
+    district_labels = [
+        f"{row[id_col]} | {row[name_col]} | {row[district_col]}".strip(" |")
+        for _, row in districts_ll.iterrows()
+    ]
+    district_points = districts_ll.geometry.representative_point()
+    district_lons = district_points.x.tolist()
+    district_lats = district_points.y.tolist()
+
+    eigvals = np.asarray(eigenvalues, dtype=float).tolist()
+    eigvecs = np.asarray(eigenvectors, dtype=float).tolist()
+    default_mode = 1 if len(eigvals) > 1 else 0
+
+    html = f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    body {{
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      background: #ffffff;
+      color: #111827;
+    }}
+    .wrapper {{
+      display: grid;
+      grid-template-columns: minmax(300px, 0.85fr) minmax(380px, 1fr) minmax(420px, 1fr);
+      gap: 12px;
+      padding: 12px;
+      align-items: start;
+    }}
+    .panel {{
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      background: #ffffff;
+      overflow: hidden;
+    }}
+    #eig-panel, #map-panel, #surface-panel {{
+      height: 720px;
+    }}
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="panel"><div id="eig-panel"></div></div>
+    <div class="panel"><div id="map-panel"></div></div>
+    <div class="panel"><div id="surface-panel"></div></div>
+  </div>
+  <script>
+    const eigenvalues = {json.dumps(eigvals)};
+    const eigenvectors = {json.dumps(eigvecs)};
+    const districtIds = {json.dumps(district_ids)};
+    const districtLabels = {json.dumps(district_labels)};
+    const districtGeoJson = {json.dumps(geojson)};
+    const districtLons = {json.dumps(district_lons)};
+    const districtLats = {json.dumps(district_lats)};
+    const defaultSelection = [{default_mode}];
+
+    function scoreFromSelection(indices) {{
+      const useIndices = (indices && indices.length) ? indices : defaultSelection;
+      const scores = eigenvectors.map((row) => {{
+        let total = 0;
+        useIndices.forEach((k) => {{
+          const value = row[k];
+          total += value * value;
+        }});
+        return Math.sqrt(total);
+      }});
+      const maxScore = Math.max(...scores, 1e-12);
+      return scores.map((value) => value / maxScore);
+    }}
+
+    function customDataFromScores(scores) {{
+      return districtLabels.map((label, idx) => [label, scores[idx]]);
+    }}
+
+    function selectionSubtitleClean(indices) {{
+      const useIndices = (indices && indices.length) ? indices : defaultSelection;
+      return useIndices
+        .map((idx) => `lambda_${{idx + 1}} = ${{eigenvalues[idx].toFixed(4)}}`)
+        .join(", ");
+    }}
+
+    function selectionSubtitle(indices) {{
+      const useIndices = (indices && indices.length) ? indices : defaultSelection;
+      return useIndices
+        .map((idx) => `λ${{idx + 1}} = ${{eigenvalues[idx].toFixed(4)}}`)
+        .join(", ");
+    }}
+
+    function markerColors(indices) {{
+      const useSet = new Set((indices && indices.length) ? indices : defaultSelection);
+      return eigenvalues.map((_, idx) => useSet.has(idx) ? "#ea580c" : "#2563eb");
+    }}
+
+    function buildSurfaceFromScores(scores, gridSize = 34) {{
+      const lonMin = Math.min(...districtLons);
+      const lonMax = Math.max(...districtLons);
+      const latMin = Math.min(...districtLats);
+      const latMax = Math.max(...districtLats);
+      const lonPad = 0.08 * (lonMax - lonMin || 1);
+      const latPad = 0.08 * (latMax - latMin || 1);
+      const xs = Array.from({{ length: gridSize }}, (_, i) =>
+        (lonMin - lonPad) + (i * (lonMax - lonMin + 2 * lonPad)) / (gridSize - 1)
+      );
+      const ys = Array.from({{ length: gridSize }}, (_, j) =>
+        (latMin - latPad) + (j * (latMax - latMin + 2 * latPad)) / (gridSize - 1)
+      );
+      const z = ys.map((lat) => xs.map((lon) => {{
+        let weightedTotal = 0;
+        let weightSum = 0;
+        for (let i = 0; i < scores.length; i += 1) {{
+          const dx = lon - districtLons[i];
+          const dy = lat - districtLats[i];
+          const d2 = dx * dx + dy * dy;
+          if (d2 < 1e-10) {{
+            return scores[i];
+          }}
+          const w = 1.0 / d2;
+          weightedTotal += w * scores[i];
+          weightSum += w;
+        }}
+        return weightedTotal / weightSum;
+      }}));
+      return {{ xs, ys, z }};
+    }}
+
+    const eigTrace = {{
+      type: "scatter",
+      mode: "markers+lines",
+      x: eigenvalues.map((_, idx) => idx + 1),
+      y: eigenvalues,
+      customdata: eigenvalues.map((value, idx) => [idx, value]),
+      marker: {{
+        size: 9,
+        color: markerColors(defaultSelection),
+        line: {{ color: "#ffffff", width: 0.8 }}
+      }},
+      line: {{ color: "#94a3b8", width: 1.2 }},
+      hovertemplate: "Mode %{{x}}<br>Eigenvalue: %{{y:.5f}}<extra></extra>"
+    }};
+
+    const initialScores = scoreFromSelection(defaultSelection);
+    const mapTrace = {{
+      type: "choropleth",
+      geojson: districtGeoJson,
+      featureidkey: "properties.{id_col}",
+      locations: districtIds,
+      z: initialScores,
+      zmin: 0,
+      zmax: 1,
+      colorscale: "YlOrRd",
+      marker: {{ line: {{ color: "#374151", width: 0.65 }} }},
+      colorbar: {{ title: "Modal loading" }},
+      customdata: customDataFromScores(initialScores),
+      hovertemplate: "%{{customdata[0]}}<br>Selected-mode score: %{{z:.3f}}<extra></extra>"
+    }};
+    const initialSurface = buildSurfaceFromScores(initialScores);
+    const surfaceTrace = {{
+      type: "surface",
+      x: initialSurface.xs,
+      y: initialSurface.ys,
+      z: initialSurface.z,
+      colorscale: "YlOrRd",
+      cmin: 0,
+      cmax: 1,
+      colorbar: {{ title: "Modal loading" }},
+      hovertemplate: "lon: %{{x:.3f}}<br>lat: %{{y:.3f}}<br>loading: %{{z:.3f}}<extra></extra>"
+    }};
+    const surfacePoints = {{
+      type: "scatter3d",
+      mode: "markers",
+      x: districtLons,
+      y: districtLats,
+      z: initialScores.map((value) => value + 0.03),
+      marker: {{
+        size: 4,
+        color: initialScores,
+        colorscale: "YlOrRd",
+        cmin: 0,
+        cmax: 1,
+        line: {{ color: "#111827", width: 0.3 }}
+      }},
+      text: districtLabels,
+      hovertemplate: "%{{text}}<br>Selected-mode score: %{{marker.color:.3f}}<extra></extra>",
+      showlegend: false
+    }};
+
+    Plotly.newPlot("eig-panel", [eigTrace], {{
+      title: {{ text: "RelWeights eigenvalue spectrum" }},
+      margin: {{ l: 55, r: 20, t: 50, b: 50 }},
+      dragmode: "select",
+      xaxis: {{ title: "Eigenvalue index", dtick: 5 }},
+      yaxis: {{ title: "Eigenvalue" }},
+      paper_bgcolor: "#ffffff",
+      plot_bgcolor: "#ffffff"
+    }}, {{displayModeBar: true, responsive: true}});
+
+    Plotly.newPlot("map-panel", [mapTrace], {{
+      title: {{ text: `District loading on selected RelWeights modes<br><sup>${{selectionSubtitleClean(defaultSelection)}}</sup>` }},
+      margin: {{ l: 10, r: 10, t: 60, b: 10 }},
+      geo: {{
+        fitbounds: "locations",
+        visible: false,
+        projection: {{ type: "mercator" }}
+      }},
+      paper_bgcolor: "#ffffff"
+    }}, {{displayModeBar: true, responsive: true}});
+
+    Plotly.newPlot("surface-panel", [surfaceTrace, surfacePoints], {{
+      title: {{ text: `3D surface of district loading<br><sup>${{selectionSubtitleClean(defaultSelection)}}</sup>` }},
+      margin: {{ l: 0, r: 0, t: 60, b: 0 }},
+      paper_bgcolor: "#ffffff",
+      scene: {{
+        xaxis: {{ title: "Longitude" }},
+        yaxis: {{ title: "Latitude" }},
+        zaxis: {{ title: "Modal loading" }},
+        aspectratio: {{ x: 1.0, y: 1.0, z: 0.55 }}
+      }}
+    }}, {{displayModeBar: true, responsive: true}});
+
+    function updateSelection(indices) {{
+      const useIndices = (indices && indices.length) ? indices : defaultSelection;
+      const scores = scoreFromSelection(useIndices);
+      const updatedSurface = buildSurfaceFromScores(scores);
+      Plotly.restyle("eig-panel", {{
+        "marker.color": [markerColors(useIndices)]
+      }});
+      Plotly.restyle("map-panel", {{
+        z: [scores],
+        customdata: [customDataFromScores(scores)]
+      }});
+      Plotly.relayout("map-panel", {{
+        "title.text": `District loading on selected RelWeights modes<br><sup>${{selectionSubtitleClean(useIndices)}}</sup>`
+      }});
+      Plotly.restyle("surface-panel", {{
+        z: [updatedSurface.z, [scores.map((value) => value + 0.03)]],
+        x: [updatedSurface.xs, [districtLons]],
+        y: [updatedSurface.ys, [districtLats]],
+        "marker.color": [null, [scores]]
+      }});
+      Plotly.relayout("surface-panel", {{
+        "title.text": `3D surface of district loading<br><sup>${{selectionSubtitleClean(useIndices)}}</sup>`
+      }});
+      Plotly.relayout("eig-panel", {{ selections: [] }});
+    }}
+
+    const eigPanel = document.getElementById("eig-panel");
+
+    eigPanel.on("plotly_selected", (eventData) => {{
+      if (!eventData || !eventData.points || !eventData.points.length) {{
+        updateSelection(defaultSelection);
+        return;
+      }}
+      const indices = [...new Set(eventData.points.map((pt) => pt.pointIndex))].sort((a, b) => a - b);
+      updateSelection(indices);
+    }});
+
+    eigPanel.on("plotly_deselect", () => {{
+      updateSelection(defaultSelection);
+    }});
+
+    eigPanel.on("plotly_click", (eventData) => {{
+      if (!eventData || !eventData.points || !eventData.points.length) {{
+        return;
+      }}
+      const idx = eventData.points[0].pointIndex;
+      updateSelection([idx]);
+    }});
+
+    eigPanel.on("plotly_doubleclick", () => {{
+      setTimeout(() => updateSelection(defaultSelection), 0);
+    }});
+  </script>
+</body>
+</html>
+"""
+    return html
 
 
 def plot_layer(
@@ -1400,8 +1749,8 @@ The matrix product, the dot product of the centered signal with its linear Lapla
 ## Compute and visualize the eigenvalue spectra
 
 ```{code-cell} ipython3
-eigvals_W = np.linalg.eigvalsh(L_W.to_numpy(dtype=float))
-eigvals_R = np.linalg.eigvalsh(L_R.to_numpy(dtype=float))
+eigvals_W, eigvecs_W = np.linalg.eigh(L_W.to_numpy(dtype=float))
+eigvals_R, eigvecs_R = np.linalg.eigh(L_R.to_numpy(dtype=float))
 
 eigen_summary = pd.DataFrame(
     {
@@ -1436,6 +1785,41 @@ plot_eigen_spectrum(
 ```
 
 The eigenvalues summarize the geometry of the operator. Small eigenvalues correspond to smooth modes of variation under the chosen graph, while larger eigenvalues correspond to sharper oscillations. Comparing the two spectra shows directly how inherited supports change the notion of smoothness relative to first-order geographic contiguity.
+
+```{note}
+:class: dropdown
+
+When the RelWeights spectrum shows visible grouping or clustering, that is often a sign that the inherited supports have created distinct contextual regimes inside the base district graph. Districts that share the same support structure tend to move together as low-energy modes, while transitions between support regimes show up as sharper spectral jumps. In Module 04, we will make this precise using the **Fiedler vector** and related graph-cut ideas: the second-smallest eigenpair is often the first signal that the support layer has partitioned the base geography into meaningful contextual blocks.
+```
+
+## Link selected eigenmodes back to districts
+
+The spectrum tells us where low- and high-frequency modes live, but it does not yet show which districts carry those modes most strongly. The linked view below bridges that gap. Selecting one or more eigenvalues highlights districts using the modal loading score
+
+$$
+\left(\sum_{k \in S} u_{ik}^2\right)^{1/2},
+$$
+
+where $S$ is the set of selected eigenmodes and $u_{ik}$ is district $i$'s entry in eigenvector $u_k$.
+
+```{code-cell} ipython3
+eigen_link_html = build_eigenvalue_linked_html(
+    districts=districts,
+    eigenvalues=eigvals_R,
+    eigenvectors=eigvecs_R,
+    id_col="ac_id",
+    name_col="AC_NAME",
+    district_col="DIST_NAME",
+)
+
+save_and_embed_html_document(
+    eigen_link_html,
+    interactive_dir / "relweights-eigenvalue-district-link.html",
+    height=820,
+)
+```
+
+By default the map opens on the Fiedler mode, i.e. the second eigenvector. Selecting additional eigenvalues shows how different parts of the district system participate in different RelWeights regimes. This is a direct bridge from the spectral picture to the geography itself.
 
 ## What this lab established
 
