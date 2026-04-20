@@ -11,6 +11,32 @@ kernelspec:
 
 # Lab 1: Building RelWeights
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/shamilkhedgikar/NYU-Talk/blob/dev/lab/book/content/02-lab-1-building-relweights/lab-roadmap-notebook.ipynb)
+
+## Starter setup
+
+If you are running this lab **locally**, the clean setup is:
+
+```bash
+conda create -n relweights_lab python=3.11
+conda activate relweights_lab
+pip install -r requirements.txt
+```
+
+Run those commands from the repository root. The root `requirements.txt` delegates to the lab requirements file, so you do not need a separate install step inside `lab/`.
+
+If you are running this lab in **Google Colab**:
+
+1. upload this notebook and `lab1_relweights_sample.zip` to Google Drive, or keep the whole repo in Drive
+2. update `COLAB_PROJECT_ROOT` in the runtime setup cell below so it points to the folder that contains `lab/`
+3. mount Drive when prompted
+4. if Colab does not already have a required package, install it with `pip install -r requirements.txt` from the repo root or install the missing packages directly
+
+So the practical distinction is:
+
+- local = create the `relweights_lab` conda environment once and reuse it
+- Colab = mount Drive and point the notebook to the Drive copy of the repo or data zip
+
 This lab turns the matrix story in `Defining RelWeights` into an executable overlay workflow. The goal is to start from two polygon layers, build an incidence matrix $B$, and then construct the contextual similarity graph
 
 $$
@@ -35,6 +61,7 @@ By the end of this lab, you should be able to:
 from __future__ import annotations
 
 import base64
+import importlib.util
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -52,12 +79,34 @@ from shapely.geometry import LineString
 ```
 
 ```{code-cell} ipython3
+IN_COLAB = importlib.util.find_spec("google.colab") is not None
+COLAB_PROJECT_ROOT = Path("/content/drive/MyDrive/NYU-Talk") if IN_COLAB else None
+
+if IN_COLAB:
+    from google.colab import drive
+
+    drive.mount("/content/drive", force_remount=False)
+    print("Colab runtime detected.")
+    print("If your repo lives elsewhere in Drive, update COLAB_PROJECT_ROOT in this cell.")
+else:
+    print("Local runtime detected.")
+```
+
+```{code-cell} ipython3
 AREA_CRS = "EPSG:32644"
 GEOGRAPHIC_CONTIGUITY = "queen"
 SAMPLE_ZIP_CANDIDATES = [
     Path("data/lab1_relweights_sample.zip"),
     Path("lab/book/content/02-lab-1-building-relweights/data/lab1_relweights_sample.zip"),
 ]
+
+if COLAB_PROJECT_ROOT is not None:
+    SAMPLE_ZIP_CANDIDATES.extend(
+        [
+            COLAB_PROJECT_ROOT / "lab/book/content/02-lab-1-building-relweights/data/lab1_relweights_sample.zip",
+            COLAB_PROJECT_ROOT / "data/lab1_relweights_sample.zip",
+        ]
+    )
 
 plt.rcParams["figure.figsize"] = (8, 8)
 plt.rcParams["axes.titlesize"] = 13

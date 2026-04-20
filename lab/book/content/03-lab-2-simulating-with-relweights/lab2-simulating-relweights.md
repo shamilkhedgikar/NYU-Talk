@@ -11,6 +11,8 @@ kernelspec:
 
 # Lab 2: Simulating RelWeights
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/shamilkhedgikar/NYU-Talk/blob/dev/lab/book/content/03-lab-2-simulating-with-relweights/lab2-simulating-relweights.ipynb)
+
 This lab builds a full Monte Carlo comparison between two ideas of autocorrelation:
 
 1. **ordinary geographic autocorrelation** using a first-order contiguity matrix $W$ on a $10 \times 10$ lattice, and

@@ -11,6 +11,8 @@ kernelspec:
 
 # Lab 3: Interpolation with RelWeights and PDFM Embeddings
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/shamilkhedgikar/NYU-Talk/blob/dev/lab/book/content/05-lab-3-interpolation-with-relweights/interpolation.ipynb)
+
 This lab uses the released **Population Dynamics Foundation Model (PDFM)** embeddings from Google Research as a fixed latent field over counties and ZCTAs, then asks what RelWeights adds on top of that representation [@agarwal2024pdfm]. The goal is not to retrain PDFM. The goal is to treat the embeddings as a rich geospatial feature space and build RelWeights-based transfer, superresolution, and imputation workflows on top of them.
 
 The PDFM paper evaluates the embeddings on interpolation, extrapolation, and superresolution tasks. Here we adapt that logic to a RelWeights setting:
@@ -83,6 +85,7 @@ Mask a subset of ZCTA labels, fit a model on the observed ZCTAs, and compare:
 ```{code-cell} ipython3
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 
 import geopandas as gpd
@@ -100,7 +103,55 @@ from sklearn.preprocessing import StandardScaler
 ```
 
 ```{code-cell} ipython3
-PDFM_BASE = Path(r"C:\Non-Sync Data\DC OP\New_Approach\population-dynamics\data\pdfm_embeddings\v0\us")
+IN_COLAB = importlib.util.find_spec("google.colab") is not None
+COLAB_PROJECT_ROOT = Path("/content/drive/MyDrive/NYU-Talk") if IN_COLAB else None
+COLAB_PDFM_BASE = (
+    Path("/content/drive/MyDrive/population-dynamics/data/pdfm_embeddings/v0/us")
+    if IN_COLAB
+    else None
+)
+
+if IN_COLAB:
+    from google.colab import drive
+
+    drive.mount("/content/drive", force_remount=False)
+    print("Colab runtime detected.")
+    print("Update COLAB_PROJECT_ROOT and/or COLAB_PDFM_BASE in this cell if your Drive layout is different.")
+else:
+    print("Local runtime detected.")
+```
+
+```{code-cell} ipython3
+PDFM_BASE_CANDIDATES = [
+    Path(r"C:\Non-Sync Data\DC OP\New_Approach\population-dynamics\data\pdfm_embeddings\v0\us"),
+    Path("data/pdfm_embeddings/v0/us"),
+]
+
+if COLAB_PROJECT_ROOT is not None:
+    PDFM_BASE_CANDIDATES.extend(
+        [
+            COLAB_PROJECT_ROOT / "data/pdfm_embeddings/v0/us",
+            COLAB_PROJECT_ROOT / "population-dynamics/data/pdfm_embeddings/v0/us",
+        ]
+    )
+
+if COLAB_PDFM_BASE is not None:
+    PDFM_BASE_CANDIDATES.insert(0, COLAB_PDFM_BASE)
+
+
+def resolve_pdfm_base(candidates: list[Path]) -> Path:
+    """Return the first existing PDFM embedding directory."""
+
+    for path in candidates:
+        if path.exists():
+            return path
+    raise FileNotFoundError(
+        "Could not find the PDFM embedding folder. "
+        "Update PDFM_BASE_CANDIDATES or COLAB_PDFM_BASE to match your local or Drive layout."
+    )
+
+
+PDFM_BASE = resolve_pdfm_base(PDFM_BASE_CANDIDATES)
 STATE = "MD"
 SEED = 20260420
 
