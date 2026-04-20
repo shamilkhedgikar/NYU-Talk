@@ -10,9 +10,7 @@ where $B$ is the cross-layer incidence matrix mapping base units into inherited 
 
 There is a real problem motivating this move. If the inherited support layer is much broader than the base analysis layer, then RelWeights can connect almost everything to everything else. Relative to a first-order geographic baseline such as queen contiguity, the projection may add many extra nonlocal edges simply because two base units happen to co-occur inside a large support. Once that happens, the graph begins to lose locality and contrast, and clustering becomes harder rather than easier: the spectrum starts to reflect a blurred, over-connected system instead of sharp support-induced regimes.
 
-So the graph-theoretic question is not just whether RelWeights adds linkages beyond queen weights, but how those additional linkages should be treated.
-
-*Should they all count equally? Should they be normalized, downweighted, or otherwise corrected so that the graph remains useful for clustering?*
+So the question is how should these additional linkages be treated? *Should they all count equally? Should they be normalized, downweighted, or otherwise corrected so that the graph remains useful for clustering?*
 
 The answer depends on the modeling goal, and in this module we focus on operator choice. Raw affinities, row-normalized operators, symmetrically normalized operators, and symmetrized random-walk operators all preserve the same support pattern but encode different notions of movement, similarity, and smoothing [@chung1997spectral; @merris1994laplacian; @fiedler1973].
 
@@ -281,43 +279,17 @@ $$
 but they emphasize different structures: $L_{\mathrm{rw}}$ is aligned with diffusion, whereas $L_{\mathrm{sym}}$ is aligned with spectral geometry and graph cuts.
 ````
 
-## 2. When projection becomes too dense
-
-One of the main practical risks with RelWeights appears when the inherited support layer is much coarser, broader, or more overlapping than the analysis layer. In that case the projection
-
-$$
-R = B B^{\top} - \operatorname{diag}(B B^{\top})
-$$
-
-can become nearly dense. Relative to a queen graph, this means that RelWeights is no longer just adding a few meaningful nonlocal ties; it may be adding a huge number of weak and potentially unhelpful extra linkages.
-
-The essential pathology is simple:
-
-- overlay-based relation is too easy to create
-- large support units induce many weak co-memberships
-- long-range ties proliferate even when they are not especially informative
-
-Mathematically, the projection entry is
-
-$$
-(B B^{\top})_{ij}
-=
-\sum_k B_{ik} B_{jk}.
-$$
-
-So $R_{ij}$ is positive whenever base units $i$ and $j$ co-participate in at least one inherited support. If the support units are broad, then many pairs share at least one support, and the graph begins to resemble a blurred complete graph rather than a sparse neighborhood system. For clustering, that is exactly the wrong direction: instead of exposing regime structure, the spectrum can wash it out.
-
-## 3. Operator comparison
+## 2. Operator comparison
 
 The practical question is therefore not whether to use an operator, but which operator is appropriate for which downstream goal.
 
-| Feature | Raw \(R\) | Random-walk \(P = D^{-1}R\) | Symmetric normalization \(S = D^{-1/2} R D^{-1/2}\) | Symmetric sum \(S_{\mathrm{ss}}\) | Normalized Laplacians |
-| --- | --- | --- | --- | --- | --- |
-| symmetry | yes | no | yes | yes | \(L_{\mathrm{sym}}\): yes, \(L_{\mathrm{rw}}\): generally no |
+| Feature | Raw $R$ | Random-walk $P = D^{-1}R$ | Symmetric normalization $S = D^{-1/2} R D^{-1/2}$ | Symmetric sum $S_ss$ | Normalized Laplacians |
+| ----- | ----- | ----- | ----- | ----- | ----- |
+| symmetry | yes | no | yes | yes | $L_sym$: yes, $L_rw$: generally no |
 | row stochasticity | no | yes | no | no | no |
 | preserves zero pattern | yes | yes | yes | yes | yes |
-| diffusion interpretation | weak | strong | moderate | moderate | \(L_{\mathrm{rw}}\): strong |
-| spectral clustering readiness | moderate | weak | strong | moderate | \(L_{\mathrm{sym}}\): strong |
+| diffusion interpretation | weak | strong | moderate | moderate | $L_rw$: strong |
+| spectral clustering readiness | moderate | weak | strong | moderate | $L_sym$: strong |
 | sensitivity to hubs | high | reduced | reduced strongly | reduced moderately | depends on normalization |
 | key diagnostic | degree distribution, density | row sums, transition structure, repeated multiplication | eigenvalues, eigengaps, eigenvectors | symmetry after normalization | spectrum, multiplicity of zero, spectral gap |
 | best use | raw overlap intensity | spatial lag, random walks, propagation | graph cuts, embeddings, regime detection | reciprocity-preserving compromise | diffusion vs spectral geometry |
@@ -329,7 +301,7 @@ First, if the degree correction does not change the support pattern, then all of
 
 Second, the spectral gap can change substantially across operators even when the zero pattern stays fixed. That is why the clustering behavior of a RelWeights graph is not a property of $R$ alone; it is also a property of the normalization.
 
-## 4. Identifying clusters in RelWeights graphs
+## 3. Identifying clusters in RelWeights graphs
 
 The reason to care about these operators is not purely algebraic. Once the graph has been normalized in a sensible way, the next question is whether the inherited support structure has created coherent regimes on the base layer. This is where the clustering spectrum enters.
 
@@ -381,7 +353,7 @@ Similarly, when a Gaussian kernel is used, the bandwidth parameter $\sigma$ stro
 
 So the lesson for RelWeights-based clustering is the same as in other spectral workflows: parameter settings should be treated as substantive choices, and careful sensitivity analysis is essential. For a contextual graph, the way support overlap is normalized or sparsified may matter as much as the clustering algorithm itself.
 
-## 5. Variable or embedding transfer while preserving sums
+## 4. Variable or embedding transfer while preserving sums
 
 Clustering is one downstream use of RelWeights. Another is transfer: taking information defined on one support layer and moving it to another while respecting the relational graph.
 
@@ -411,7 +383,7 @@ The two terms play different roles:
 - $\|X - E_{\alpha}^{(0)}\|_F^2$ says: stay close to the overlap-based transfer
 - $\lambda \operatorname{tr}(X^{\top} L_R X)$ says: smooth the embedding across the RelWeights graph
 
-So the optimization says: among all possible target embeddings, choose the one that stays near the transferred embedding while also respecting the support-induced relational geometry.
+Essentially we are saying that from all possible values for target embeddings, choose the one that stays near the embeddings being transferred while respecting the support-induced relational geometry.
 
 ### Closed-form solution
 
@@ -435,7 +407,20 @@ $$
 (I + \lambda L_R)^{-1} E_{\alpha}^{(0)}.
 $$
 
-This is not an arbitrary smoothing rule. It is the exact minimizer of the fidelity-smoothness tradeoff.
+This type of minimizer is analogous to the fidelity-smoothness tradeoff common in signal processing.
+
+````{note}
+:class: dropdown
+On the choice of \(\lambda\)
+
+The parameter $\lambda$ controls how strongly the smoother prioritizes relational coherence over fidelity to the baseline transfer.
+
+- if $\lambda \approx 0$, then $(I + \lambda L_R)^{-1}$ is close to the identity and the result stays near $E_{\alpha}^{(0)}$
+- as $\lambda$ increases, high-frequency variation over the RelWeights graph is damped more aggressively
+- on a connected graph, very large $\lambda$ pushes each column toward a low-frequency, nearly constant profile while preserving its target-layer mean
+
+So $\lambda$ should be interpreted relative to the spectrum of $L_R$. There is no universal best value. In practice, it is a tuning parameter and should be examined through sensitivity analysis, predictive usefulness, or the stability of the resulting transferred embeddings.
+````
 
 ### Columnwise interpretation
 
@@ -452,7 +437,7 @@ $$
 
 one problem for each embedding coordinate $j$. Each dimension is smoothed over the same RelWeights graph. The geometry acts on the support layer, not on the embedding dimension.
 
-### Why this is graph denoising
+### Equivalence to Graph Denoising
 
 Using the Laplacian identity,
 
@@ -476,10 +461,10 @@ $$
 \right\}.
 $$
 
-This is vector-valued denoising on the RelWeights graph:
+This is like vector-valued denoising on the RelWeights graph.
 
-- do not move any target embedding too far from its baseline transferred value
-- but if two target units share strong inherited structure, their embedding vectors should be similar
+- not moving any target embedding too far from its baseline transferred value
+- if two target units share strong inherited structure, their embedding vectors should be similar
 
 ### What is conserved
 
@@ -640,6 +625,129 @@ So the smoother acts like a conservative diffusion or balancing operator on the 
 - high values are pulled down
 - low values are pulled up
 - total target-layer column mass stays fixed
+
+In this toy example, $\lambda = 0.2$ is simply a moderate illustrative choice: large enough to show visible smoothing, but not so large that the transferred embedding collapses toward a nearly constant profile. In practice, $\lambda$ can be learned or tuned by repeating the transfer over multiple iterations or folds and selecting the value that yields the best downstream stability, predictive performance, or reconstruction fidelity.
+
+## 6. Regression-style generation of \(x\) and relational roughness decomposition
+
+Another way to generate or extrapolate a target-layer outcome is through a regression model that mixes base-layer variables with inherited support variables. Start with
+
+$$
+x = X\beta + \varepsilon,
+$$
+
+where:
+
+- $X$ contains base-layer regressors
+- $B X_{\beta}$ can contain overlay-layer variables projected to the base support
+- $\varepsilon$ is unexplained variation
+
+A concrete RelWeights specification is
+
+$$
+x = X_{\alpha}\beta_{\alpha} + B X_{\beta}\beta_{\beta} + \varepsilon.
+$$
+
+So a simple extrapolated or fitted signal is
+
+$$
+\widehat{x} = X_{\alpha}\widehat{\beta}_{\alpha} + B X_{\beta}\widehat{\beta}_{\beta}.
+$$
+
+This is useful because it generates $x$ on the base layer while still allowing inherited-support information to enter through the projected overlay term.
+
+### Replace \(x\) inside Laplacian energy
+
+Now evaluate the signal using RelWeights geometry:
+
+$$
+x^{\top}L_R x.
+$$
+
+Substituting $x = X\beta + \varepsilon$ gives
+
+$$
+(X\beta + \varepsilon)^{\top}L_R(X\beta + \varepsilon)
+=
+\beta^{\top}X^{\top}L_R X\beta
++
+2\beta^{\top}X^{\top}L_R\varepsilon
++
+\varepsilon^{\top}L_R\varepsilon.
+$$
+
+Under the standard mean-zero regression assumption, the cross-term vanishes in expectation, so
+
+$$
+\mathbb{E}[x^{\top}L_R x]
+=
+\beta^{\top}X^{\top}L_R X\beta
++
+\mathbb{E}[\varepsilon^{\top}L_R\varepsilon].
+$$
+
+This gives a natural decomposition:
+
+| Term | Meaning |
+| --- | --- |
+| $x^T L_R x$ | total relational roughness |
+| $\hat{x}^T L_R \hat{x}$ | roughness explained by regressors |
+| $\hat{\varepsilon}^T L_R \hat{\varepsilon}$ | residual roughness |
+
+So relational variation splits into explained and unexplained components, much like ANOVA decomposes total sum of squares into model and residual parts, except the metric is now RelWeights geometry rather than Euclidean geometry.
+
+### Projection-matrix view
+
+Recall the OLS hat matrix
+
+$$
+H = X(X^{\top}X)^{-1}X^{\top},
+\qquad
+\widehat{x} = Hx.
+$$
+
+Then the same idea can be written as
+
+$$
+x^{\top}L_R x
+=
+x^{\top}H L_R H x
++
+x^{\top}(I-H)L_R(I-H)x.
+$$
+
+This is not a strict Euclidean sum-of-squares identity unless additional commutation conditions hold, but it is still a very useful conceptual partition:
+
+- $H L_R H$ captures explained relational structure
+- $(I-H)L_R(I-H)$ captures unexplained relational structure
+
+### Why this is powerful
+
+Traditional regression diagnostics focus on
+
+$$
+\|x - \widehat{x}\|_2^2,
+$$
+
+which assumes independent Euclidean geometry across observations. The RelWeights metric instead measures variation across the overlay-similarity graph. If
+
+$$
+\widehat{x}^{\top}L_R\widehat{x}
+$$
+
+is small, then the fitted signal is well aligned with the inherited support structure. If it remains large, then the regression is missing relational structure even if the ordinary Euclidean fit looks adequate.
+
+This also suggests a natural relational analogue of $R^2$:
+
+$$
+R_L^2
+=
+1 - \frac{\widehat{\varepsilon}^{\top}L_R\widehat{\varepsilon}}{x^{\top}L_R x}.
+$$
+
+This is not yet a standard off-the-shelf statistic, but mathematically it is a natural way to ask how much overlay-structured variation is explained by the regressors.
+
+
 
 ## What This Module Sets Up
 
