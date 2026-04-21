@@ -85,13 +85,18 @@ Mask a subset of ZCTA labels, fit a model on the observed ZCTAs, and compare:
 ```{code-cell} ipython3
 from __future__ import annotations
 
+import html
 import importlib.util
 from pathlib import Path
 
+import folium
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from IPython.display import HTML, display
+from scipy.sparse import csr_matrix
+from scipy.sparse.csgraph import minimum_spanning_tree
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.linear_model import Ridge
@@ -163,6 +168,8 @@ SMOOTH_LAMBDA = 0.35
 ANCHOR_WEIGHT = 25.0
 
 RANDOM_TEST_FRACTION = 0.30
+QUEEN_BUFFER_M = 25.0
+QUEEN_BUFFER_SWEEP = (0.0, 25.0, 100.0)
 
 plt.rcParams["figure.figsize"] = (8, 6)
 plt.rcParams["figure.dpi"] = 120
@@ -228,6 +235,109 @@ def plot_geographies(gdfs, columns, titles, cmap="viridis", figsize=(12, 4), vmi
         ax.set_axis_off()
     plt.tight_layout()
     plt.show()
+
+
+def resolve_lab3_interactive_dir() -> Path:
+    """Resolve an interactive output directory for local, repo-root, or Colab runs."""
+
+    target_parts = ("lab", "book", "content", "05-lab-3-interpolation-with-relweights")
+    cwd = Path.cwd().resolve()
+    candidates: list[Path] = []
+
+    if COLAB_PROJECT_ROOT is not None:
+        candidates.append(COLAB_PROJECT_ROOT / "lab/book/content/05-lab-3-interpolation-with-relweights/interactive")
+
+    # If the notebook is being run from inside its own section directory, prefer that.
+    if cwd.name == "05-lab-3-interpolation-with-relweights":
+        candidates.append(cwd / "interactive")
+
+    # If the working directory is nested under the section directory, walk upward to it.
+    for parent in [cwd, *cwd.parents]:
+        if parent.name == "05-lab-3-interpolation-with-relweights":
+            candidates.append(parent / "interactive")
+            break
+
+    # If we can find the repository root, construct the canonical section path from there.
+    for parent in [cwd, *cwd.parents]:
+        if (parent / "lab" / "book" / "myst.yml").exists():
+            candidates.append(parent.joinpath(*target_parts) / "interactive")
+            break
+        if (parent / "myst.yml").exists() and parent.name == "book":
+            candidates.append(parent / "content" / "05-lab-3-interpolation-with-relweights" / "interactive")
+            break
+
+    # Fall back to obvious relative choices.
+    candidates.extend(
+        [
+            cwd / "content/05-lab-3-interpolation-with-relweights/interactive",
+            cwd / "interactive",
+        ]
+    )
+
+    for candidate in candidates:
+        if candidate.parent.exists() or candidate.name == "interactive":
+            candidate.mkdir(parents=True, exist_ok=True)
+            return candidate
+
+    fallback = cwd / "interactive"
+    fallback.mkdir(parents=True, exist_ok=True)
+    return fallback
+
+
+def save_and_embed_html_document(html_text: str, output_path: Path, height: int = 720) -> None:
+    """Save a standalone HTML document and embed it back into the notebook."""
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(html_text, encoding="utf-8")
+    rel_path = output_path.as_posix()
+    srcdoc = html.escape(output_path.read_text(encoding="utf-8"), quote=True)
+    display(
+        HTML(
+            f"""
+            <div style="margin: 0.5rem 0 1rem 0;">
+              <iframe
+                srcdoc="{srcdoc}"
+                width="100%"
+                height="{height}"
+                style="border: 1px solid #d1d5db; border-radius: 8px; background: white;"
+              ></iframe>
+              <div style="margin-top: 0.5rem; font-size: 0.92rem;">
+                <a href="{rel_path}" target="_blank" rel="noopener noreferrer">
+                  Open standalone interactive graphic
+                </a>
+              </div>
+            </div>
+            """
+        )
+    )
+
+
+def save_and_embed_folium_map(map_obj: folium.Map, output_path: Path, height: int = 720) -> None:
+    """Save a Folium map to HTML and embed the saved document inline."""
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    map_obj.save(str(output_path))
+    rel_path = output_path.as_posix()
+    srcdoc = html.escape(output_path.read_text(encoding="utf-8"), quote=True)
+    display(
+        HTML(
+            f"""
+            <div style="margin: 0.5rem 0 1rem 0;">
+              <iframe
+                srcdoc="{srcdoc}"
+                width="100%"
+                height="{height}"
+                style="border: 1px solid #d1d5db; border-radius: 8px; background: white;"
+              ></iframe>
+              <div style="margin-top: 0.5rem; font-size: 0.92rem;">
+                <a href="{rel_path}" target="_blank" rel="noopener noreferrer">
+                  Open standalone interactive map
+                </a>
+              </div>
+            </div>
+            """
+        )
+    )
 ```
 
 ```{code-cell} ipython3
@@ -298,21 +408,30 @@ def build_relweights_from_membership(B: np.ndarray) -> np.ndarray:
     return R
 
 
-def build_queen_adjacency(gdf: gpd.GeoDataFrame) -> np.ndarray:
-    """Build a binary queen-style adjacency matrix from polygon boundaries."""
+def build_queen_adjacency(
+    gdf: gpd.GeoDataFrame,
+    buffer_m: float = QUEEN_BUFFER_M,
+    area_crs: str = "EPSG:3857",
+) -> np.ndarray:
+    """Build a robust queen-style adjacency matrix with an optional metric buffer."""
 
-    gdf = gdf.reset_index(drop=True)
-    n = len(gdf)
+    work = gdf.reset_index(drop=True).to_crs(area_crs)
+    if buffer_m > 0:
+        work = work.copy()
+        work["geometry"] = work.geometry.buffer(buffer_m)
+
+    n = len(work)
     W = np.zeros((n, n), dtype=float)
-    sindex = gdf.sindex
+    sindex = work.sindex
 
-    for i, geom in enumerate(gdf.geometry):
+    for i, geom in enumerate(work.geometry):
         candidates = list(sindex.intersection(geom.bounds))
         for j in candidates:
             if j <= i:
                 continue
-            other = gdf.geometry.iloc[j]
-            if geom.touches(other):
+            other = work.geometry.iloc[j]
+            is_neighbor = geom.intersects(other) if buffer_m > 0 else geom.touches(other)
+            if is_neighbor:
                 W[i, j] = 1.0
                 W[j, i] = 1.0
     return W
@@ -359,6 +478,34 @@ def component_sizes(W: np.ndarray) -> list[int]:
     return sorted(sizes, reverse=True)
 
 
+def edge_count(W: np.ndarray) -> int:
+    """Return the number of undirected edges in a symmetric adjacency matrix."""
+
+    return int(np.count_nonzero(np.triu(W > 0, 1)))
+
+
+def queen_buffer_sweep(
+    gdf: gpd.GeoDataFrame,
+    buffer_distances: tuple[float, ...] = QUEEN_BUFFER_SWEEP,
+) -> pd.DataFrame:
+    """Summarize how a small geometric buffer changes the ZCTA queen graph."""
+
+    rows = []
+    for buffer_m in buffer_distances:
+        W = build_queen_adjacency(gdf, buffer_m=buffer_m)
+        sizes = component_sizes(W)
+        rows.append(
+            {
+                "buffer_m": int(buffer_m),
+                "edges": edge_count(W),
+                "isolates": int(np.sum(W.sum(axis=1) == 0.0)),
+                "components": len(sizes),
+                "largest_component": sizes[0] if sizes else 0,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def threshold_sweep(
     similarity: np.ndarray,
     support_mask: np.ndarray,
@@ -397,12 +544,224 @@ def build_knn_similarity(coords: np.ndarray, k: int) -> np.ndarray:
     W = np.maximum(W, W.T)
     np.fill_diagonal(W, 0.0)
     return W
+
+
+def maximum_spanning_tree_from_similarity(W: np.ndarray) -> np.ndarray:
+    """Return the maximum-spanning-tree backbone of a nonnegative similarity graph."""
+
+    W = np.maximum(W, W.T).astype(float)
+    np.fill_diagonal(W, 0.0)
+    if not np.any(W > 0):
+        return np.zeros_like(W)
+
+    dist = np.where(W > 0, 1.0 - W, 0.0)
+    mst = minimum_spanning_tree(csr_matrix(dist))
+    dist_tree = mst.toarray()
+    sim_tree = np.where(dist_tree > 0, 1.0 - dist_tree, 0.0)
+    sim_tree = np.maximum(sim_tree, sim_tree.T)
+    np.fill_diagonal(sim_tree, 0.0)
+    return sim_tree
+
+
+def build_connectivity_overlay_map(
+    gdf: gpd.GeoDataFrame,
+    W_geo: np.ndarray,
+    W_embed: np.ndarray,
+    W_tree: np.ndarray,
+    id_col: str = "place",
+    title: str = "Embedding similarity versus geographic connectivity",
+    max_nonlocal_edges: int = 260,
+) -> folium.Map:
+    """Overlay queen edges, nonlocal embedding edges, and a tree backbone on a Folium map."""
+
+    centroids = gdf.to_crs(3857).geometry.centroid.to_crs(4326)
+    center = [float(centroids.y.mean()), float(centroids.x.mean())]
+    fmap = folium.Map(location=center, zoom_start=8, tiles="CartoDB positron")
+
+    poly_layer = folium.FeatureGroup(name="ZCTA polygons", show=True)
+    folium.GeoJson(
+        gdf[[id_col, "county", "city", "geometry"]],
+        style_function=lambda _feature: {
+            "fillColor": "#00000000",
+            "color": "#6b7280",
+            "weight": 0.6,
+        },
+        tooltip=folium.GeoJsonTooltip(fields=[id_col, "county", "city"]),
+    ).add_to(poly_layer)
+    poly_layer.add_to(fmap)
+
+    queen_layer = folium.FeatureGroup(name="Queen edges", show=False)
+    tree_layer = folium.FeatureGroup(name="Embedding tree backbone", show=True)
+    embed_layer = folium.FeatureGroup(name="Top nonlocal embedding edges", show=True)
+
+    n = len(gdf)
+    for i in range(n):
+        for j in range(i + 1, n):
+            if W_geo[i, j] > 0:
+                folium.PolyLine(
+                    [(centroids.iloc[i].y, centroids.iloc[i].x), (centroids.iloc[j].y, centroids.iloc[j].x)],
+                    color="#9ca3af",
+                    weight=1.0,
+                    opacity=0.45,
+                ).add_to(queen_layer)
+
+            if W_tree[i, j] > 0:
+                folium.PolyLine(
+                    [(centroids.iloc[i].y, centroids.iloc[i].x), (centroids.iloc[j].y, centroids.iloc[j].x)],
+                    color="#c2410c",
+                    weight=3.0,
+                    opacity=0.90,
+                    tooltip=f"tree weight = {W_tree[i, j]:.3f}",
+                ).add_to(tree_layer)
+
+    nonlocal_edges = []
+    for i in range(n):
+        for j in range(i + 1, n):
+            if W_embed[i, j] > 0 and W_geo[i, j] == 0:
+                nonlocal_edges.append((float(W_embed[i, j]), i, j))
+
+    nonlocal_edges.sort(reverse=True)
+    for weight, i, j in nonlocal_edges[:max_nonlocal_edges]:
+        folium.PolyLine(
+            [(centroids.iloc[i].y, centroids.iloc[i].x), (centroids.iloc[j].y, centroids.iloc[j].x)],
+            color="#7c3aed",
+            weight=2.0,
+            opacity=0.55,
+            tooltip=f"embedding similarity = {weight:.3f}",
+        ).add_to(embed_layer)
+
+    queen_layer.add_to(fmap)
+    embed_layer.add_to(fmap)
+    tree_layer.add_to(fmap)
+    folium.LayerControl(collapsed=False).add_to(fmap)
+
+    title_html = f"""
+    <div style="position: fixed; top: 14px; left: 56px; z-index: 1000;
+                background: rgba(255,255,255,0.92); padding: 8px 12px;
+                border: 1px solid #d1d5db; border-radius: 6px;
+                font-size: 14px; font-weight: 600;">
+      {title}
+    </div>
+    """
+    fmap.get_root().html.add_child(folium.Element(title_html))
+    return fmap
+
+
+def build_regime_comparison_map(
+    gdf: gpd.GeoDataFrame,
+    regime_cols: list[str],
+    layer_titles: list[str],
+    id_col: str = "place",
+    title: str = "ZCTA spectral regimes across graph constructions",
+) -> folium.Map:
+    """Build a toggleable Folium map comparing multiple categorical regime assignments."""
+
+    centroids = gdf.to_crs(3857).geometry.centroid.to_crs(4326)
+    center = [float(centroids.y.mean()), float(centroids.x.mean())]
+    fmap = folium.Map(location=center, zoom_start=7, tiles="CartoDB positron")
+
+    outline_layer = folium.FeatureGroup(name="ZCTA outlines", show=True)
+    folium.GeoJson(
+        gdf[[id_col, "county", "city", "geometry"]],
+        style_function=lambda _feature: {
+            "fillColor": "#00000000",
+            "color": "#ffffff",
+            "weight": 0.35,
+        },
+        tooltip=folium.GeoJsonTooltip(fields=[id_col, "county", "city"]),
+    ).add_to(outline_layer)
+    outline_layer.add_to(fmap)
+
+    cmap = plt.get_cmap("tab20")
+    legend_sections = []
+
+    for regime_col, layer_title in zip(regime_cols, layer_titles):
+        regime_values = sorted(int(v) for v in pd.Series(gdf[regime_col]).dropna().unique())
+        color_lookup = {
+            value: "#{:02x}{:02x}{:02x}".format(
+                *(int(255 * channel) for channel in cmap(idx % 20)[:3])
+            )
+            for idx, value in enumerate(regime_values)
+        }
+
+        layer = folium.FeatureGroup(name=layer_title, show=(regime_col == "regime_hybrid"))
+        geojson = folium.GeoJson(
+            gdf[[id_col, "county", "city", regime_col, "geometry"]],
+            style_function=lambda feature, _lookup=color_lookup, _col=regime_col: {
+                "fillColor": _lookup.get(int(feature["properties"][_col]), "#9ca3af"),
+                "color": "#374151",
+                "weight": 0.35,
+                "fillOpacity": 0.72,
+            },
+            highlight_function=lambda feature, _lookup=color_lookup, _col=regime_col: {
+                "fillColor": _lookup.get(int(feature["properties"][_col]), "#6b7280"),
+                "color": "#111827",
+                "weight": 1.2,
+                "fillOpacity": 0.90,
+            },
+            tooltip=folium.GeoJsonTooltip(
+                fields=[id_col, "county", "city", regime_col],
+                aliases=["ZCTA", "County", "City", "Regime"],
+                localize=True,
+                sticky=False,
+                labels=True,
+            ),
+        )
+        geojson.add_to(layer)
+        layer.add_to(fmap)
+
+        legend_rows = "".join(
+            f"""
+            <div style="display:flex; align-items:center; gap:6px; margin:2px 0;">
+              <span style="display:inline-block; width:12px; height:12px; border-radius:2px; background:{color_lookup[value]}; border:1px solid #d1d5db;"></span>
+              <span>Regime {value}</span>
+            </div>
+            """
+            for value in regime_values
+        )
+        legend_sections.append(
+            f"""
+            <div style="margin-top: 8px;">
+              <div style="font-weight: 600; margin-bottom: 4px;">{layer_title}</div>
+              {legend_rows}
+            </div>
+            """
+        )
+
+    folium.LayerControl(collapsed=False).add_to(fmap)
+
+    title_html = f"""
+    <div style="position: fixed; top: 14px; left: 56px; z-index: 1000;
+                background: rgba(255,255,255,0.94); padding: 8px 12px;
+                border: 1px solid #d1d5db; border-radius: 6px;
+                font-size: 14px; font-weight: 600;">
+      {title}
+    </div>
+    """
+    legend_html = f"""
+    <div style="position: fixed; bottom: 18px; left: 18px; z-index: 1000;
+                max-height: 56vh; overflow-y: auto;
+                background: rgba(255,255,255,0.95); padding: 10px 12px;
+                border: 1px solid #d1d5db; border-radius: 8px;
+                font-size: 12px; line-height: 1.25; min-width: 210px;">
+      <div style="font-weight: 700; margin-bottom: 6px;">Regime legend</div>
+      <div style="color:#374151; margin-bottom: 6px;">
+        In the <code>tab20</code> palette, the blue classes are <strong>Regime 0</strong>
+        (dark blue) and <strong>Regime 1</strong> (light blue). Hover any polygon to see its exact regime id.
+      </div>
+      {''.join(legend_sections)}
+    </div>
+    """
+    fmap.get_root().html.add_child(folium.Element(title_html))
+    fmap.get_root().html.add_child(folium.Element(legend_html))
+    return fmap
 ```
 
 ```{code-cell} ipython3
 B_county, county_membership_index = build_county_transfer_matrix(zcta_gdf, county_gdf)
 R_county = build_relweights_from_membership(B_county)
-W_queen = build_queen_adjacency(zcta_gdf)
+queen_buffer_table = queen_buffer_sweep(zcta_gdf)
+W_queen = build_queen_adjacency(zcta_gdf, buffer_m=QUEEN_BUFFER_M)
 
 zcta_embeddings = zcta_gdf[embedding_cols].to_numpy()
 embedding_similarity = cosine_similarity(zcta_embeddings)
@@ -416,6 +775,7 @@ R_hybrid = W_queen + R_thresholded
 
 graph_summary = pd.DataFrame(
     {
+        "buffered_queen": graph_diagnostics(W_queen),
         "county_relweights": graph_diagnostics(R_county),
         "thresholded_relweights": graph_diagnostics(R_thresholded),
         "queen_hybrid": graph_diagnostics(R_hybrid),
@@ -426,11 +786,25 @@ print(f"Similarity threshold tau: {tau:.3f}")
 graph_summary.round(3)
 ```
 
+```{code-cell} ipython3
+queen_buffer_table
+```
+
 The thresholded graph is the bridge back to the clustering chapter:
 
 - raw county membership is too easy to create
 - PDFM similarity gives an empirical way to keep only strong inherited ties
 - the hybrid graph preserves local geography while adding support-aware contextual edges
+
+There is one more practical issue before we interpret any spectral result: **exact queen contiguity on raw ZCTA polygons is too brittle**. Maryland ZCTAs include multipart polygons, shoreline fragments, and tiny geometric gaps. If queen adjacency is constructed with an exact `touches` test, the geographic graph becomes artificially disjoint. That would make the later fragmentation story look like a property of RelWeights when it is really a property of the raw polygon topology.
+
+The buffer table above makes that point concrete:
+
+- with an exact `0 m` queen, the graph collapses to only `57` edges and hundreds of isolates
+- with a tiny `25 m` metric buffer, most false gaps close and the graph becomes broadly connected
+- with `100 m`, the statewide graph is even more connected, but begins to smooth away more of the original cartographic precision
+
+So the lab uses a **buffered queen graph with `25 m`** as the geographic baseline. The idea is modest: treat very small slivers, shoreline gaps, and precision mismatches as artifacts rather than substantive separations. This keeps the geographic operator faithful to the broad ZCTA geography while avoiding false fragmentation in the downstream Laplacian and clustering analysis.
 
 ```{code-cell} ipython3
 within_county_similarity = pd.Series(embedding_similarity[county_pairs]).describe(
@@ -460,9 +834,33 @@ which is the `0.75` quantile of within-county ZCTA cosine similarity in Maryland
 
 This is the first important interpretation point for RelWeights with foundation-model embeddings: `\tau` is not just a tuning constant. It controls how much of the inherited support survives after the PDFM geometry is used as a filter.
 
-## 7. Spectral regimes from the thresholded hybrid graph
+## 7. Spectral comparison of queen, county, thresholded, and hybrid graphs
 
-Now compute a spectral embedding of the hybrid graph and use it to define empirical regimes on the ZCTA layer.
+Up to this point the notebook has constructed several distinct operators:
+
+- `W_queen`: buffered geometric adjacency on ZCTAs
+- `R_county`: inherited support induced only by county membership
+- `R_thresholded`: county support filtered by PDFM embedding similarity
+- `W_queen + R_thresholded`: the final hybrid graph used later for interpolation
+
+If we only inspect the hybrid graph, we lose the ability to say which parts of the spectral signal come from ordinary geography, which come from inherited support, and which come only from their combination. So in this section we compare the four operators directly through the symmetric normalized Laplacian
+
+$$
+L_{\mathrm{sym}} = I - D^{-1/2} W D^{-1/2}.
+$$
+
+For each graph, the low end of the spectrum tells us about connectivity and large-scale organization:
+
+- the multiplicity of the eigenvalue `0` counts connected components among positive-degree nodes
+- the first nonzero eigenvalues describe the easiest smooth modes on that graph
+- large gaps after the zero eigenspace suggest stronger component or regime separation
+
+So the spectral comparison below should be read as a decomposition of support structure:
+
+- `W_queen` tells us what buffered geographic adjacency alone looks like
+- `R_county` tells us what broad inherited support alone looks like
+- `R_thresholded` shows what survives after PDFM similarity sharpens those inherited ties
+- the hybrid graph shows whether contextual ties add information without destroying geographic coherence
 
 ```{code-cell} ipython3
 def normalized_laplacian(W: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -491,47 +889,127 @@ def spectral_regimes(
     spectral_coords = spectral_coords / (np.linalg.norm(spectral_coords, axis=1, keepdims=True) + 1e-12)
     regimes = KMeans(n_clusters=n_clusters, n_init=20, random_state=seed).fit_predict(spectral_coords)
     return eigvals, eigvecs, regimes, zero_multiplicity
-
-
-eigvals_hybrid, eigvecs_hybrid, regime_labels, zero_multiplicity = spectral_regimes(
-    R_hybrid, N_SPECTRAL_CLUSTERS, seed=SEED
-)
-zcta_gdf["regime"] = regime_labels
-hybrid_component_sizes = component_sizes(R_hybrid)
-
-print("First ten hybrid eigenvalues:")
-print(np.round(eigvals_hybrid[:10], 5))
-print(f"Zero-eigenvalue multiplicity: {zero_multiplicity}")
-print(f"Connected components in the hybrid graph: {len(hybrid_component_sizes)}")
-print(f"Isolated ZCTAs in the hybrid graph: {hybrid_isolates}")
-print("Largest component sizes:")
-print(hybrid_component_sizes[:10])
 ```
 
 ```{code-cell} ipython3
-fig, ax = plt.subplots(figsize=(7, 3.5))
-ax.plot(np.arange(1, 16), eigvals_hybrid[:15], marker="o", color="#3f72af")
-ax.set_title("Low-order eigenvalues of the hybrid graph")
+graph_variants = {
+    "queen": W_queen,
+    "county": R_county,
+    "thresholded": R_thresholded,
+    "hybrid": R_hybrid,
+}
+
+spectral_results: dict[str, dict[str, object]] = {}
+spectral_rows = []
+
+for name, W_graph in graph_variants.items():
+    eigvals, eigvecs, regimes, zero_mult = spectral_regimes(W_graph, N_SPECTRAL_CLUSTERS, seed=SEED)
+    component_sizes_graph = component_sizes(W_graph)
+    isolates_graph = int(np.sum(W_graph.sum(axis=1) == 0.0))
+    first_positive_idx = zero_mult
+    first_positive = float(eigvals[first_positive_idx]) if first_positive_idx < len(eigvals) else np.nan
+    next_positive = float(eigvals[first_positive_idx + 1]) if first_positive_idx + 1 < len(eigvals) else np.nan
+
+    spectral_results[name] = {
+        "W": W_graph,
+        "eigvals": eigvals,
+        "eigvecs": eigvecs,
+        "regimes": regimes,
+        "zero_mult": zero_mult,
+        "component_sizes": component_sizes_graph,
+        "isolates": isolates_graph,
+    }
+
+    zcta_gdf[f"regime_{name}"] = regimes
+    spectral_rows.append(
+        {
+            "graph": name,
+            "zero_eigenvalues": zero_mult,
+            "connected_components": len(component_sizes_graph),
+            "isolates": isolates_graph,
+            "largest_component": component_sizes_graph[0] if component_sizes_graph else 0,
+            "avg_degree": float(W_graph.sum(axis=1).mean()),
+            "density": graph_density(W_graph),
+            "lambda_first_positive": first_positive,
+            "lambda_next": next_positive,
+        }
+    )
+
+spectral_table = pd.DataFrame(spectral_rows).set_index("graph")
+zcta_gdf["regime"] = zcta_gdf["regime_hybrid"]
+
+spectral_table.round(4)
+```
+
+```{code-cell} ipython3
+fig, ax = plt.subplots(figsize=(8.2, 4.2))
+colors = {
+    "queen": "#4C72B0",
+    "county": "#DD8452",
+    "thresholded": "#55A868",
+    "hybrid": "#C44E52",
+}
+
+for name, result in spectral_results.items():
+    ax.plot(
+        np.arange(1, 16),
+        result["eigvals"][:15],
+        marker="o",
+        linewidth=1.8,
+        markersize=4,
+        label=name,
+        color=colors[name],
+    )
+
+ax.set_title("Low-order eigenvalues across graph constructions")
 ax.set_xlabel("Ordered mode")
 ax.set_ylabel("Eigenvalue")
 ax.grid(alpha=0.25)
+ax.legend(ncol=2)
 plt.tight_layout()
 plt.show()
 ```
 
 ```{code-cell} ipython3
 plot_geographies(
-    [zcta_gdf],
-    ["regime"],
-    [f"{STATE} ZCTA regimes from the hybrid graph"],
+    [zcta_gdf, zcta_gdf, zcta_gdf, zcta_gdf],
+    ["regime_queen", "regime_county", "regime_thresholded", "regime_hybrid"],
+    [
+        f"{STATE} ZCTA regimes from queen adjacency",
+        f"{STATE} ZCTA regimes from county RelWeights",
+        f"{STATE} ZCTA regimes from thresholded RelWeights",
+        f"{STATE} ZCTA regimes from the hybrid graph",
+    ],
     cmap="tab20",
-    figsize=(6, 6),
+    figsize=(16, 5),
 )
 ```
 
-These spectral regimes are not the final prediction object. They are an empirical structure check. If the thresholded or hybrid graph contains meaningful support-induced organization, the leading eigenvectors should reveal it.
+```{code-cell} ipython3
+interactive_dir = resolve_lab3_interactive_dir()
+regime_map = build_regime_comparison_map(
+    zcta_gdf,
+    ["regime_queen", "regime_county", "regime_thresholded", "regime_hybrid"],
+    [
+        "Queen regimes",
+        "County RelWeights regimes",
+        "Thresholded RelWeights regimes",
+        "Hybrid regimes",
+    ],
+    title=f"{STATE} ZCTA regime comparison: queen, county, thresholded, and hybrid",
+)
+save_and_embed_folium_map(
+    regime_map,
+    interactive_dir / "zcta-regime-comparison.html",
+    height=760,
+)
+```
 
-The first ten eigenvalues display as `-0.` because of floating-point rounding, not because the normalized Laplacian is truly negative. For a symmetric normalized Laplacian,
+These regime maps are not the final prediction object. They are an empirical structure check. The point is to inspect how support structure changes as the graph changes.
+
+The interactive version makes that comparison easier to read. Turn layers on and off against the same Carto basemap, then hover a ZCTA to see its regime id under the active graph. The floating legend also identifies the `tab20` colors directly, so the blue classes are no longer anonymous: dark blue is `Regime 0`, light blue is `Regime 1`.
+
+The first ten hybrid eigenvalues can display as `-0.` because of floating-point rounding, not because the normalized Laplacian is truly negative. For a symmetric normalized Laplacian,
 
 $$
 L_{\mathrm{sym}} = I - D^{-1/2} R D^{-1/2},
@@ -539,21 +1017,24 @@ $$
 
 the spectrum is positive semidefinite. So values printed as `-0.` should be read as numerical zero. The more substantive diagnostic is the **zero-eigenvalue multiplicity**. For the symmetric normalized Laplacian, that multiplicity equals the number of connected components **among nodes with positive degree**. Isolated nodes are treated differently: because they have degree zero, they contribute eigenvalue `1`, not `0`.
 
-That is why the notebook reports both:
+That is why the hybrid graph can report both:
 
 - `28` zero eigenvalues
 - `71` connected components in the raw hybrid graph
 - `43` isolated ZCTAs
 
-So the graph is not merely clustered. It is heavily fragmented, and a large share of that fragmentation comes from nodes that lost all contextual ties after thresholding.
+Those numbers are exactly consistent: `71 - 43 = 28`. So the graph is not merely clustered. It is heavily fragmented, and a large share of that fragmentation comes from nodes that lost all contextual ties after thresholding.
 
-That does **not** mean spectral clustering is impossible. It means the clustering problem has changed:
+This comparative view is the more informative one:
 
-- first, the graph has a hard component structure created by the threshold
-- second, the informative embedding for clustering starts **after** the zero eigenspace
-- third, regime discovery is best understood as clustering within the positive spectrum, or even within large connected components separately
+- `queen` usually has the strongest geographic coherence and the smallest zero eigenspace
+- `county` often looks like a block graph, because all within-county ties are kept and cross-county ties are absent
+- `thresholded` is where PDFM similarity becomes restrictive; if the cutoff is aggressive, fragmentation appears immediately
+- `hybrid` reveals whether adding contextual ties to geography preserves broad connectivity or instead creates many disconnected mini-systems
 
-That is exactly why the helper function skips the whole zero-eigenspace before running `k`-means on the spectral coordinates. The regimes shown below should therefore be read as clusters **conditional on the graph already being fragmented** by the PDFM similarity filter.
+So if the thresholded and hybrid spectra are dominated by many zeros, that is telling you something substantive: the support-aware graph is not yet behaving like one statewide manifold. It is behaving like many local islands. In that case, spectral clustering is still possible, but the interpretation changes. The first nontrivial modes are no longer mainly describing broad regimes; they are first accounting for graph fragmentation.
+
+That is exactly why the helper function skips the whole zero-eigenspace before running `k`-means on the spectral coordinates. The hybrid regimes shown later should therefore be read as clusters **conditional on the graph already being fragmented** by the PDFM similarity filter.
 
 ## 8. Experiment A: embedding transfer
 
@@ -879,7 +1360,7 @@ comparison_table.round(4)
 ```{code-cell} ipython3
 regime_error = pd.DataFrame(
     {
-        "regime": regime_labels,
+        "regime": zcta_gdf["regime"],
         "actual": zcta_target,
         "pred_hybrid_superres": superres_hybrid,
         "pred_hybrid_impute": impute_hybrid_all,
@@ -1107,9 +1588,67 @@ But we can still use the embedding geometry itself to infer **additional similar
 
 The second route is often more stable, because it filters out noisy high-frequency coordinates before constructing the graph.
 
+Formally, let
+
+$$
+E \in \mathbb{R}^{n \times p}
+$$
+
+be the ZCTA embedding matrix, where row $E_{i\cdot}$ is the $p$-dimensional PDFM vector for target unit $i$. After standardizing columns, we obtain
+
+$$
+Z = \operatorname{scale}(E).
+$$
+
+We then compress the embedding field to its first $q$ principal directions:
+
+$$
+U = Z V_q \in \mathbb{R}^{n \times q},
+$$
+
+where $V_q$ contains the leading $q$ eigenvectors of the embedding covariance matrix. The rows $u_i$ are now low-rank semantic coordinates for each ZCTA.
+
+From there we define an embedding-similarity graph
+
+$$
+S_{ij} = \max\{0, \cos(u_i, u_j)\},
+$$
+
+and sparsify it with a symmetric $k$-nearest-neighbor mask,
+
+$$
+R_{\mathrm{lowrank}} = S \odot M^{(k)},
+$$
+
+where $M^{(k)}_{ij}=1$ if $j$ is among the top-$k$ neighbors of $i$ or vice versa. The hybrid augmentation then becomes
+
+$$
+W_{\mathrm{hybrid}} = W_{\mathrm{queen}} + R_{\mathrm{lowrank}}.
+$$
+
+This is the core mathematical move in Section 13: the embeddings are no longer only regressors. They become a **graph-construction device**. Ordinary geometry still lives in $W_{\mathrm{queen}}$, while nonlocal semantic similarity enters through $R_{\mathrm{lowrank}}$.
+
+For visual intuition, it helps to separate three edge types:
+
+- queen edges: immediate geographic neighbors
+- low-rank embedding edges: places that are semantically similar in the compressed PDFM manifold
+- tree-backbone edges: a sparse semantic spine that keeps only the strongest routes needed to connect the embedding graph
+
+The tree backbone is the maximum-spanning tree of the low-rank similarity graph,
+
+$$
+T_{\mathrm{lowrank}}
+=
+\arg\max_{T \in \mathcal{T}}
+\sum_{(i,j)\in T} (R_{\mathrm{lowrank}})_{ij},
+$$
+
+where $\mathcal{T}$ is the set of spanning trees on the ZCTA vertices. Intuitively, this is the smallest edge set that still preserves the strongest semantic pathways through the embedding manifold.
+
 ```{code-cell} ipython3
 LOWRANK_PCS = 12
 LOWRANK_KNN = 8
+LAB3_INTERACTIVE_DIR = resolve_lab3_interactive_dir()
 
 embedding_scaler = StandardScaler()
 zcta_embedding_std = embedding_scaler.fit_transform(zcta_embeddings)
@@ -1117,11 +1656,13 @@ embedding_pca = PCA(n_components=LOWRANK_PCS, random_state=SEED)
 zcta_embedding_lowrank = embedding_pca.fit_transform(zcta_embedding_std)
 
 R_lowrank = build_knn_similarity(zcta_embedding_lowrank, k=LOWRANK_KNN)
+R_lowrank_tree = maximum_spanning_tree_from_similarity(R_lowrank)
 R_lowrank_hybrid = W_queen + R_lowrank
 
 lowrank_graph_summary = pd.DataFrame(
     {
         "lowrank_similarity": graph_diagnostics(R_lowrank),
+        "lowrank_tree": graph_diagnostics(R_lowrank_tree),
         "queen_plus_lowrank": graph_diagnostics(R_lowrank_hybrid),
     }
 ).T
@@ -1133,6 +1674,7 @@ zcta_gdf["lowrank_regime"] = lowrank_regimes
 
 print(f"Explained variance in first {LOWRANK_PCS} PCs: {embedding_pca.explained_variance_ratio_.sum():.3f}")
 print(f"Zero-eigenvalue multiplicity in queen + low-rank graph: {lowrank_zero}")
+print(f"Embedding-tree edges: {int((R_lowrank_tree > 0).sum() / 2)}")
 lowrank_graph_summary.round(3)
 ```
 
@@ -1145,6 +1687,37 @@ plot_geographies(
     figsize=(12, 5),
 )
 ```
+
+```{code-cell} ipython3
+R_lowrank_nonlocal = np.where(W_queen > 0, 0.0, R_lowrank)
+lowrank_overlay_map = build_connectivity_overlay_map(
+    zcta_gdf,
+    W_geo=W_queen,
+    W_embed=R_lowrank_nonlocal,
+    W_tree=R_lowrank_tree,
+    title="Queen connectivity, nonlocal embedding ties, and the low-rank tree backbone",
+)
+
+save_and_embed_folium_map(
+    lowrank_overlay_map,
+    LAB3_INTERACTIVE_DIR / "lowrank-embedding-vs-queen-connectivity.html",
+    height=760,
+)
+```
+
+```{code-cell} ipython3
+zcta_gdf["tree_degree"] = (R_lowrank_tree > 0).sum(axis=1)
+
+plot_geographies(
+    [zcta_gdf],
+    ["tree_degree"],
+    ["Embedding-tree degree on ZCTAs"],
+    cmap="magma",
+    figsize=(6, 5),
+)
+```
+
+The interactive overlay map is the clearest visual intuition for the formal math above. Gray queen edges show ordinary first-order geography. Purple edges show semantically similar but nonlocal ZCTAs in the compressed embedding manifold. Orange edges show the tree backbone, i.e. the minimum number of semantic links needed to keep the strongest manifold structure connected. The `tree_degree` map then highlights which ZCTAs act as semantic junctions in that backbone.
 
 In this run the first `12` principal components explain about `52%` of the standardized embedding variance, and the `queen + low-rank` graph has zero-eigenvalue multiplicity `1`. That is a useful contrast with the county-thresholded hybrid. The low-rank augmentation stays essentially connected, so it preserves more global spectral structure while still injecting PDFM-based similarity into the graph.
 

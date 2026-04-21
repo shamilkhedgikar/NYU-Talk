@@ -17,3 +17,7 @@ __pycache__/
 .idea/
 Thumbs.db
 .DS_Store
+
+# Large data
+lab/book/content/05-lab-3-interpolation-with-relweights/data/population-dynamics/data/pdfm_embeddings
+lab/book/content/05-lab-3-interpolation-with-relweights/data/population-dynamics/data/pdfm_embeddings.zip
