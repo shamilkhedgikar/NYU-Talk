@@ -6,6 +6,7 @@ lab/book/_build/
 _nyu_proposal_final.txt
 _relweights_laplacian_reference.txt
 *.log
+slides/.build/
 
 # Python / notebooks
 __pycache__/
@@ -21,3 +22,6 @@ Thumbs.db
 # Large data
 lab/book/content/05-lab-3-interpolation-with-relweights/data/population-dynamics/data/pdfm_embeddings
 lab/book/content/05-lab-3-interpolation-with-relweights/data/population-dynamics/data/pdfm_embeddings.zip
+
+# Slides
+slides

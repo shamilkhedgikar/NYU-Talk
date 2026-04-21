@@ -86,6 +86,58 @@ SCRIPT = r"""
     return anchor;
   };
 
+  const resolveTargetElement = (targetId) => {
+    if (!targetId) return null;
+
+    const candidates = [targetId];
+    if (targetId.startsWith("id-")) {
+      candidates.push(targetId.slice(3));
+    } else {
+      candidates.push(`id-${targetId}`);
+    }
+
+    for (const candidate of candidates) {
+      const element = document.getElementById(candidate);
+      if (element) return element;
+    }
+    return null;
+  };
+
+  const syncCurrentPageHashLinks = () => {
+    const currentOrigin = window.location.origin;
+    const currentPath = normalizePath(window.location.pathname);
+
+    document.querySelectorAll("a[href*='#']").forEach((link) => {
+      const href = link.getAttribute("href");
+      if (!href || href.startsWith("http")) return;
+
+      const url = new URL(href, currentOrigin);
+      if (!url.hash) return;
+      if (normalizePath(url.pathname) !== currentPath) return;
+
+      const targetId = decodeURIComponent(url.hash.slice(1));
+      const targetEl = resolveTargetElement(targetId);
+      if (!targetEl || !targetEl.id || targetEl.id === targetId) return;
+
+      link.setAttribute("href", `${url.pathname}#${targetEl.id}`);
+    });
+  };
+
+  const scrollToResolvedHash = (hash, behavior = "smooth") => {
+    if (!hash) return false;
+
+    const targetId = decodeURIComponent(hash.replace(/^#/, ""));
+    const targetEl = resolveTargetElement(targetId);
+    if (!targetEl) return false;
+
+    if (targetEl.id && targetEl.id !== targetId) {
+      history.replaceState(null, "", `${window.location.pathname}#${targetEl.id}`);
+    }
+
+    targetEl.scrollIntoView({ behavior, block: "start" });
+    return true;
+  };
+
   const populateSidebar = () => {
     const project = getProject();
     if (!project || !Array.isArray(project.toc)) return false;
@@ -132,6 +184,7 @@ SCRIPT = r"""
       }
     });
 
+    syncCurrentPageHashLinks();
     return populated > 0;
   };
 
@@ -153,11 +206,12 @@ SCRIPT = r"""
         if (currentPath !== targetPath) return;
 
         const targetId = decodeURIComponent(url.hash.slice(1));
-        const targetEl = document.getElementById(targetId);
+        const targetEl = resolveTargetElement(targetId);
         if (!targetEl) return;
 
         event.preventDefault();
-        history.replaceState(null, "", `${url.pathname}${url.hash}`);
+        const resolvedHash = targetEl.id ? `#${targetEl.id}` : url.hash;
+        history.replaceState(null, "", `${url.pathname}${resolvedHash}`);
         targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
       },
       true,
@@ -180,12 +234,21 @@ SCRIPT = r"""
     window.setTimeout(schedulePopulate, 250);
     window.setTimeout(schedulePopulate, 1000);
     window.addEventListener("popstate", schedulePopulate);
-    window.addEventListener("hashchange", schedulePopulate);
+    window.addEventListener("hashchange", () => {
+      schedulePopulate();
+      scrollToResolvedHash(window.location.hash, "smooth");
+    });
 
     const observer = new MutationObserver(() => {
       schedulePopulate();
     });
     observer.observe(document.body, { childList: true, subtree: true });
+
+    if (window.location.hash) {
+      window.requestAnimationFrame(() => {
+        scrollToResolvedHash(window.location.hash, "auto");
+      });
+    }
   };
 
   if (document.readyState === "loading") {
@@ -200,8 +263,16 @@ SCRIPT = r"""
 
 def inject_script(html_path: Path) -> bool:
     text = html_path.read_text(encoding="utf-8")
-    if 'id="relweights-sidebar-enhancer"' in text:
-        return False
+    script_pattern = re.compile(
+        r'<script id="relweights-sidebar-enhancer">.*?</script>',
+        flags=re.DOTALL,
+    )
+    if script_pattern.search(text):
+        updated = script_pattern.sub(lambda _match: SCRIPT.strip(), text, count=1)
+        if updated == text:
+            return False
+        html_path.write_text(updated, encoding="utf-8")
+        return True
     if "</body>" not in text:
         return False
     text = text.replace("</body>", f"{SCRIPT}\n</body>")
@@ -266,7 +337,7 @@ def inject_sidebar_children(html_path: Path, children_map: dict[str, list[dict[s
     changed = False
 
     pattern = re.compile(
-        r'(?P<prefix><div data-state="closed" class="w-full"><div class="myst-toc-item.*?<a[^>]+href="(?P<href>[^"]+)"[^>]*>.*?</a>.*?</div><div[^>]*class="[^"]*\bcollapsible-content\b[^"]*"[^>]*>)(?P<content>\s*)(?P<suffix></div></div>)',
+        r'(?P<prefix><div data-state="(?:closed|open)" class="w-full"><div class="myst-toc-item.*?<a[^>]+href="(?P<href>[^"]+)"[^>]*>.*?</a>.*?</div><div[^>]*class="[^"]*\bcollapsible-content\b[^"]*"[^>]*>)(?P<content>.*?)(?P<suffix></div></div>)',
         flags=re.DOTALL,
     )
 

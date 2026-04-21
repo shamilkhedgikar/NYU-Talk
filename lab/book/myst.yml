@@ -75,31 +75,31 @@ project:
     file: content/03-lab-2-simulating-with-relweights/lab2-simulating-relweights.ipynb
     children:
     - title: 1. Introduction and learning goals
-      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#1-introduction-and-learning-goals
+      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#id-1-introduction-and-learning-goals
     - title: 2. Mathematical background
-      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#2-mathematical-background
+      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#id-2-mathematical-background
     - title: 3. Build the 10x10 lattice and geographic weights
-      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#3-build-the-10x10-lattice-and-geographic-weights
+      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#id-3-build-the-10x10-lattice-and-geographic-weights
     - title: 4. Build irregular overlay layers
-      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#4-build-irregular-overlay-layers
-    - title: 5. Build B, R, and LR
-      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#5-build-b-r-and-l-r
+      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#id-4-build-irregular-overlay-layers
+    - title: 5. Build B, R, and L_R
+      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#id-5-build-b-r-and-l-r
     - title: 6. Define Laplacian energy and Geary statistics
-      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#6-define-laplacian-energy-and-geary-statistics
+      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#id-6-define-laplacian-energy-and-geary-statistics
     - title: 7. Visualize the supports
-      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#7-visualize-the-supports
+      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#id-7-visualize-the-supports
     - title: 8. Simulate the four DGPs
-      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#8-simulate-the-four-dgps
+      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#id-8-simulate-the-four-dgps
     - title: 9. Run Monte Carlo
-      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#9-run-monte-carlo
+      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#id-9-run-monte-carlo
     - title: 10. Summarize results
-      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#10-summarize-results
+      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#id-10-summarize-results
     - title: 11. Inspect one worked example
-      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#11-inspect-one-worked-example
+      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#id-11-inspect-one-worked-example
     - title: 12. Interpretation and discussion
-      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#12-interpretation-and-discussion
+      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#id-12-interpretation-and-discussion
     - title: 13. Extensions and exercises
-      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#13-extensions-and-exercises
+      url: /content/lab-2-simulating-with-relweights/lab2-simulating-relweights#id-13-extensions-and-exercises
   - file: content/04-clustering-and-other-applications/clustering-and-other-applications.md
     children:
     - title: 1. Conceptual setup
@@ -118,35 +118,35 @@ project:
     file: content/05-lab-3-interpolation-with-relweights/interpolation.md
     children:
     - title: 1. Learning goals
-      url: /content/lab-3-interpolation-with-relweights/interpolation#1-learning-goals
+      url: /content/lab-3-interpolation-with-relweights/interpolation#id-1-learning-goals
     - title: 2. Why PDFM plus RelWeights?
-      url: /content/lab-3-interpolation-with-relweights/interpolation#2-why-pdfm-plus-relweights
+      url: /content/lab-3-interpolation-with-relweights/interpolation#id-2-why-pdfm-plus-relweights
     - title: 3. Task setup
-      url: /content/lab-3-interpolation-with-relweights/interpolation#3-task-setup
+      url: /content/lab-3-interpolation-with-relweights/interpolation#id-3-task-setup
     - title: 4. Load Maryland PDFM embeddings and geometry
-      url: /content/lab-3-interpolation-with-relweights/interpolation#4-load-maryland-pdfm-embeddings-and-geometry
+      url: /content/lab-3-interpolation-with-relweights/interpolation#id-4-load-maryland-pdfm-embeddings-and-geometry
     - title: 5. Visualize the latent embedding field
-      url: /content/lab-3-interpolation-with-relweights/interpolation#5-visualize-the-latent-embedding-field
+      url: /content/lab-3-interpolation-with-relweights/interpolation#id-5-visualize-the-latent-embedding-field
     - title: 6. Build county transfer and graph variants
-      url: /content/lab-3-interpolation-with-relweights/interpolation#6-build-county-transfer-and-graph-variants
-    - title: 7. Spectral regimes from the thresholded hybrid graph
-      url: /content/lab-3-interpolation-with-relweights/interpolation#7-spectral-regimes-from-the-thresholded-hybrid-graph
+      url: /content/lab-3-interpolation-with-relweights/interpolation#id-6-build-county-transfer-and-graph-variants
+    - title: 7. Spectral comparison of queen, county, thresholded, and hybrid graphs
+      url: /content/lab-3-interpolation-with-relweights/interpolation#id-7-spectral-comparison-of-queen-county-thresholded-and-hybrid-graphs
     - title: '8. Experiment A: embedding transfer'
-      url: /content/lab-3-interpolation-with-relweights/interpolation#8-experiment-a-embedding-transfer
+      url: /content/lab-3-interpolation-with-relweights/interpolation#id-8-experiment-a-embedding-transfer
     - title: '9. Experiment B: county-to-ZCTA superresolution'
-      url: /content/lab-3-interpolation-with-relweights/interpolation#9-experiment-b-county-to-zcta-superresolution
+      url: /content/lab-3-interpolation-with-relweights/interpolation#id-9-experiment-b-county-to-zcta-superresolution
     - title: '10. Experiment C: ZCTA imputation'
-      url: /content/lab-3-interpolation-with-relweights/interpolation#10-experiment-c-zcta-imputation
+      url: /content/lab-3-interpolation-with-relweights/interpolation#id-10-experiment-c-zcta-imputation
     - title: 11. Compare the experiments through graph structure
-      url: /content/lab-3-interpolation-with-relweights/interpolation#11-compare-the-experiments-through-graph-structure
+      url: /content/lab-3-interpolation-with-relweights/interpolation#id-11-compare-the-experiments-through-graph-structure
     - title: 12. Multi-target evaluation with Data Commons variables
-      url: /content/lab-3-interpolation-with-relweights/interpolation#12-multi-target-evaluation-with-data-commons-variables
+      url: /content/lab-3-interpolation-with-relweights/interpolation#id-12-multi-target-evaluation-with-data-commons-variables
     - title: 13. PDFM embeddings as graph structure, not only covariates
-      url: /content/lab-3-interpolation-with-relweights/interpolation#13-pdfm-embeddings-as-graph-structure-not-only-covariates
+      url: /content/lab-3-interpolation-with-relweights/interpolation#id-13-pdfm-embeddings-as-graph-structure-not-only-covariates
     - title: 14. Modality-specific graphs from trends, maps, and weather
-      url: /content/lab-3-interpolation-with-relweights/interpolation#14-modality-specific-graphs-from-trends-maps-and-weather
+      url: /content/lab-3-interpolation-with-relweights/interpolation#id-14-modality-specific-graphs-from-trends-maps-and-weather
     - title: 15. What this lab established
-      url: /content/lab-3-interpolation-with-relweights/interpolation#15-what-this-lab-established
+      url: /content/lab-3-interpolation-with-relweights/interpolation#id-15-what-this-lab-established
     - title: Exercises
       url: /content/lab-3-interpolation-with-relweights/interpolation#exercises
   - title: Industry R&D Applications
