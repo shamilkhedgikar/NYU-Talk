@@ -163,6 +163,40 @@ html {
   scroll-behavior: smooth;
 }
 
+.journal-author-line {
+  margin-top: 0.9rem;
+  margin-bottom: 1.35rem;
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+
+.journal-author-line p {
+  margin: 0;
+}
+
+.journal-author-line sup {
+  font-size: 0.68em;
+  line-height: 0;
+}
+
+.journal-author-line sup a {
+  font-size: 0;
+  text-decoration: none;
+}
+
+.journal-author-line sup a::after {
+  content: "1";
+  font-size: 0.68rem;
+}
+
+.intro-abstract-heading {
+  margin-top: 1.8rem;
+  margin-bottom: 0.75rem;
+  font-size: 1.28rem;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
 @media (min-width: 1024px) {
   .article-grid {
     grid-template-columns:

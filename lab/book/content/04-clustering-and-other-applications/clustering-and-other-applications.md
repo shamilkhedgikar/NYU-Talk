@@ -628,7 +628,7 @@ So the smoother acts like a conservative diffusion or balancing operator on the 
 
 In this toy example, $\lambda = 0.2$ is simply a moderate illustrative choice: large enough to show visible smoothing, but not so large that the transferred embedding collapses toward a nearly constant profile. In practice, $\lambda$ can be learned or tuned by repeating the transfer over multiple iterations or folds and selecting the value that yields the best downstream stability, predictive performance, or reconstruction fidelity.
 
-## 6. Regression-style generation of \(x\) and relational roughness decomposition
+## 6. Regression-style generation of x and relational roughness decomposition
 
 Another way to generate or extrapolate a target-layer outcome is through a regression model that mixes base-layer variables with inherited support variables. Start with
 

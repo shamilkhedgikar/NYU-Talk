@@ -1,6 +1,12 @@
 # From Overlays to Operators: Relational Spatial Weights for Data-Driven Policy
 
-## Abstract
+:::{div}
+:class: journal-author-line
+
+Shamil Khedgikar[^author-affiliation]
+:::
+
+<div id="abstract" class="intro-abstract-heading" role="heading" aria-level="2">Abstract</div>
 
 Data-driven urban policymaking increasingly relies on ideas developed in spatial econometrics, geospatial machine learning, and high-dimensional data systems. However, most analytical workflows still encode spatial dependence with simple contiguity derived from geographic adjacency or distance-decay. These assumptions often fail to capture the relational structure of spatial systems, where interactions are mediated across layers such as zoning regimes, infrastructure networks, institutional boundaries, and environmental systems.
 
@@ -34,3 +40,5 @@ To overcome this problem, we consider the idea that overlays, which are are usua
 ## Why This Matters Now
 
 Recent advances in machine learning such as [@agarwal2024pdfm],[@brown2025alphaearth] have further expanded the analytical possibilities for spatial data through the development of high-dimensional spatial embeddings derived from satellite imagery, mobility data, and large-scale socioeconomic datasets. These embeddings represent spatial units as vectors in a latent feature space, capturing complex contextual relationships that are difficult to encode through traditional variables. However, a persistent challenge in applying such representations within spatial analysis is that embeddings are often generated at spatial supports that do not align with the units used in policy analysis or econometric modeling. As a result, there is a growing need for formal operators capable of transferring or propagating these representations across heterogeneous spatial supports. RelWeights provide one such mechanism: by defining spatial similarity through shared contextual overlays rather than purely geometric adjacency, they allow embeddings learned at one spatial layer to be systematically transferred or diffused to another. By defining similarity through shared contextual overlays rather than only through adjacency, we aim to develop a principled way to transfer, diffuse, and regularize information across heterogeneous spatial supports.
+
+[^author-affiliation]: AECOM

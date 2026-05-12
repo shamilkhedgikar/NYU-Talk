@@ -30,9 +30,16 @@ lab/
 
 ## Local build
 
+Lab 3 reads its cached Data Commons extract during normal builds. Set `DATACOMMONS_API_KEY` or `DC_API_KEY` only when you want to refresh that cache.
+
 ```powershell
 pip install -r lab/requirements.txt
-jupyter-book build lab/book
+Set-Location lab/book
+python -m jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.kernel_name=relweights_lab content/05-lab-3-interpolation-with-relweights/interpolation.ipynb
+python sync_nav.py
+python -m jupyter_book build --html
+python postprocess_site.py
+python -m jupyter_book start
 ```
 
 ## Colab wiring
